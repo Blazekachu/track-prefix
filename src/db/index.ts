@@ -1,6 +1,8 @@
 import Database from "better-sqlite3";
 import { SERIES } from "@/core/series";
 import { WALLET_LABELS } from "@/core/wallet-labels";
+import { loadConfig } from "@/core/job-config";
+import { satToBlock } from "@/core/sat-math";
 
 export function initSchema(db: Database.Database): void {
   db.exec(`
@@ -154,6 +156,45 @@ export function seedSeries(db: Database.Database): void {
     INSERT OR REPLACE INTO series (id, name_length, sat_start, sat_end, sat_count, target_block, estimated_year, mined)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
+
+  const cfg =
+    process.env.VITEST || process.env.NODE_ENV === "test"
+      ? null
+      : loadConfig();
+  if (cfg?.job) {
+    const job = cfg.job;
+    const satStart = BigInt(job.satStart);
+    const targetBlock = Number(satToBlock(satStart));
+    const prior = db
+      .prepare("SELECT sat_start, sat_end FROM series WHERE id = ?")
+      .get(job.seriesId) as { sat_start: string; sat_end: string } | undefined;
+    const jobChanged =
+      !prior ||
+      prior.sat_start !== job.satStart ||
+      prior.sat_end !== job.satEnd;
+
+    db.exec("DELETE FROM series");
+    insert.run(
+      job.seriesId,
+      job.nameLength,
+      job.satStart,
+      job.satEnd,
+      Number(job.satCount),
+      targetBlock,
+      "tracked",
+      1
+    );
+
+    if (jobChanged) {
+      db.exec(`
+        DELETE FROM utxos;
+        DELETE FROM trace_queue;
+        DELETE FROM trace_state;
+        DELETE FROM inscriptions;
+      `);
+    }
+    return;
+  }
 
   const tx = db.transaction(() => {
     for (const s of SERIES) {

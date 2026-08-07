@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    env: {
+      TRACK_PREFIX_CONFIG: path.resolve(__dirname, ".vitest-no-config.json"),
+    },
   },
   resolve: {
     alias: {

@@ -1,62 +1,96 @@
 "use client";
 
-import { useBlockHeight } from "./use-block-height";
+import { useEffect, useState } from "react";
 
-const fmt = (n: number) => n.toLocaleString("en-US");
+type Job = {
+  prefix: string;
+  seriesId: number;
+  nameLength: number;
+  satStart: string;
+  satEnd: string;
+  satCount: string;
+};
 
-const SERIES_DATA = [
-  { id: 1, nameLength: 11, count: "308.9M", blockStart: 579124, blockEnd: 579125, year: "2019", mined: true },
-  { id: 2, nameLength: 10, count: "11.8M", blockStart: 1568922, blockEnd: 1568923, year: "2038", mined: false },
-  { id: 3, nameLength: 9, count: "456K", blockStart: 2544826, blockEnd: 2544826, year: "2056", mined: false },
-  { id: 4, nameLength: 8, count: "17.5K", blockStart: 3536797, blockEnd: 3536798, year: "2075", mined: false },
-  { id: 5, nameLength: 7, count: "676", blockStart: 4530322, blockEnd: 4530322, year: "2094", mined: false },
-  { id: 6, nameLength: 6, count: "26", blockStart: 5500597, blockEnd: 5500597, year: "2112", mined: false },
-  { id: 7, nameLength: 5, count: "1", blockStart: 6403598, blockEnd: 6403598, year: "~2130", mined: false },
-];
+type SeriesRow = {
+  id: number;
+  name_length: number;
+  sat_count: number;
+  target_block: number;
+  mined: number;
+};
 
 export function SeriesCards() {
-  const { blockHeight } = useBlockHeight();
+  const [job, setJob] = useState<Job | null>(null);
+  const [series, setSeries] = useState<SeriesRow[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [cfgRes, seriesRes] = await Promise.all([
+          fetch("/api/config"),
+          fetch("/api/series"),
+        ]);
+        if (cfgRes.ok) {
+          const cfg = await cfgRes.json();
+          setJob(cfg.config?.job ?? null);
+        }
+        if (seriesRes.ok) setSeries(await seriesRes.json());
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
 
   return (
     <section>
       <h2 className="text-terminal-dim text-xs tracking-widest mb-3">
-        SERIES OVERVIEW
+        ACTIVE JOB
       </h2>
-      <div className="grid grid-cols-7 gap-2">
-        {SERIES_DATA.map((s) => {
-          const progress = blockHeight && !s.mined
-            ? Math.min(100, Math.round((blockHeight / s.blockEnd) * 100))
-            : s.mined ? 100 : 0;
+      {job ? (
+        <div className="border border-terminal-green/30 bg-terminal-green/5 rounded p-4">
+          <div className="text-terminal-green text-lg font-bold">
+            {job.prefix}
+          </div>
+          <div className="text-sm text-terminal-bright mt-1">
+            Series {job.seriesId} · {job.nameLength}-letter ·{" "}
+            {Number(job.satCount).toLocaleString("en-US")} sats · mined
+          </div>
+          <div className="text-xs text-terminal-dim mt-2">
+            sats {Number(job.satStart).toLocaleString("en-US")} →{" "}
+            {Number(job.satEnd).toLocaleString("en-US")}
+          </div>
+        </div>
+      ) : (
+        <p className="text-terminal-dim text-sm">No active job.</p>
+      )}
 
-          return (
+      {series.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          {series.map((s) => (
             <div
               key={s.id}
-              className={`border p-3 rounded text-center transition-colors cursor-pointer hover:border-terminal-green/50 ${
+              className={`border p-3 rounded text-center ${
                 s.mined
                   ? "border-terminal-green/30 bg-terminal-green/5"
-                  : "border-terminal-border bg-terminal-surface"
+                  : "border-terminal-border"
               }`}
             >
               <div className="text-terminal-dim text-xs">S{s.id}</div>
-              <div className="text-lg font-bold mt-1">
+              <div className="text-sm font-bold mt-1">
                 {s.mined ? (
                   <span className="text-terminal-green">MINED</span>
                 ) : (
-                  <span className="text-terminal-amber">{progress}%</span>
+                  <span className="text-terminal-amber">FUTURE</span>
                 )}
               </div>
-              <div className="text-terminal-bright text-sm mt-1">{s.count}</div>
-              <div className="text-terminal-dim text-xs">{s.nameLength}L</div>
-              <div className="text-terminal-dim text-xs mt-1">
-                {s.blockStart === s.blockEnd
-                  ? `BLK ${fmt(s.blockStart)}`
-                  : `BLK ${fmt(s.blockStart)}-${fmt(s.blockEnd)}`}
+              <div className="text-terminal-bright text-sm mt-1">
+                {Number(s.sat_count).toLocaleString("en-US")}
               </div>
-              <div className="text-terminal-dim text-xs">{s.year}</div>
+              <div className="text-terminal-dim text-xs">{s.name_length}L</div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

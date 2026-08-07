@@ -26,14 +26,24 @@ export function SeriesDetail() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [title, setTitle] = useState("TRACKED SERIES");
   const PAGE_SIZE = 50;
 
   useEffect(() => {
     async function load() {
       try {
+        const cfgRes = await fetch("/api/config");
+        const cfgJson = cfgRes.ok ? await cfgRes.json() : null;
+        const seriesId = cfgJson?.config?.job?.seriesId ?? 1;
+        const job = cfgJson?.config?.job;
+        if (job) {
+          setTitle(
+            `${String(job.prefix).toUpperCase()} · SERIES ${job.seriesId} — MINED (${Number(job.satCount).toLocaleString("en-US")} SATS)`
+          );
+        }
         const [utxoRes, statsRes] = await Promise.all([
-          fetch("/api/utxos?series=1"),
-          fetch("/api/stats?series=1"),
+          fetch(`/api/utxos?series=${seriesId}`),
+          fetch(`/api/stats?series=${seriesId}`),
         ]);
         if (utxoRes.ok) setUtxos(await utxoRes.json());
         if (statsRes.ok) setStats(await statsRes.json());
@@ -43,7 +53,9 @@ export function SeriesDetail() {
         setLoading(false);
       }
     }
-    load();
+    void load();
+    const t = setInterval(() => void load(), 10000);
+    return () => clearInterval(t);
   }, []);
 
   const filtered = search.trim()
@@ -69,7 +81,7 @@ export function SeriesDetail() {
   return (
     <section className="border border-terminal-green/20 rounded p-4 bg-terminal-surface">
       <h2 className="text-terminal-green text-xs tracking-widest mb-3">
-        SERIES 1 — MINED (308,915,776 SATS)
+        {title}
       </h2>
 
       {loading ? (
