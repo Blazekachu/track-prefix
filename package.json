@@ -1,11 +1,11 @@
 {
-  "name": "bhang-tracker",
+  "name": "track-prefix",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npx tsx scripts/start-server.ts",
     "build": "next build",
-    "start": "next start",
+    "start": "npx tsx scripts/start-server.ts",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",

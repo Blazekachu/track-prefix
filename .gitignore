@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -40,12 +41,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-bhang-tracker.db
-bhang-tracker.db-journal
-bhang-tracker.db-wal
-bhang-tracker.db-shm
-bhang-tracker-backup-*
-bhang-tracker.db.trace.lock
+track-prefix.db
+track-prefix.db-journal
+track-prefix.db-wal
+track-prefix.db-shm
+track-prefix-backup-*
+track-prefix.db.trace.lock
+config.json
+.track-prefix.env
 provider-health.json
 logs/
+tracker-data.json
 .env
