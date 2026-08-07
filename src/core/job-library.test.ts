@@ -10,8 +10,10 @@ import {
 import {
   createJob,
   getActiveDbPath,
+  healActiveJobStorage,
   listJobSummaries,
   loadRegistry,
+  removeJob,
   setActiveJob,
   registryPath,
   jobsRoot,
@@ -137,5 +139,42 @@ describe("job-library", () => {
     const summaries = listJobSummaries();
     expect(summaries[0].isActive).toBe(true);
     expect(summaries[0].id).toBe(entry.id);
+  });
+
+  it("heals missing job folder and Start path can open DB", () => {
+    saveConfig({
+      version: 1,
+      wizardComplete: false,
+      mode: "public_api",
+      modeCredentials: {},
+      job: null,
+    });
+    const entry = createJob({ job: sampleJob, mode: "public_api" });
+    fs.rmSync(path.join(jobsRoot(), entry.id), { recursive: true, force: true });
+
+    const summaries = listJobSummaries();
+    expect(summaries[0].storageMissing).toBe(true);
+
+    const healed = healActiveJobStorage();
+    expect(healed.healed).toBe(true);
+    expect(fs.existsSync(path.join(jobsRoot(), entry.id))).toBe(true);
+    expect(listJobSummaries()[0].storageMissing).toBe(false);
+  });
+
+  it("removeJob drops registry entry and clears active", () => {
+    saveConfig({
+      version: 1,
+      wizardComplete: true,
+      mode: "public_api",
+      modeCredentials: {},
+      job: null,
+    });
+    const entry = createJob({ job: sampleJob, mode: "public_api" });
+    expect(loadConfig()?.activeJobId).toBe(entry.id);
+    removeJob(entry.id);
+    expect(loadRegistry().jobs).toHaveLength(0);
+    expect(loadConfig()?.activeJobId).toBeUndefined();
+    expect(loadConfig()?.job).toBeNull();
+    expect(fs.existsSync(path.join(jobsRoot(), entry.id))).toBe(false);
   });
 });

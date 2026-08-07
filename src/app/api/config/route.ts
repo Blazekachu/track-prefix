@@ -6,7 +6,7 @@ import {
   type DataMode,
   type TrackPrefixConfig,
 } from "@/core/job-config";
-import { createJob, listJobSummaries } from "@/core/job-library";
+import { createJob, healActiveJobStorage, listJobSummaries } from "@/core/job-library";
 import { validatePrefix } from "@/core/prefix";
 import { buildSeriesRanges } from "@/core/series-ranges";
 import { seriesIsMined } from "@/core/forecast";
@@ -14,13 +14,15 @@ import { seriesIsMined } from "@/core/forecast";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Ensures legacy layout migration before reading activeJobId.
+  // Ensures legacy layout migration + heals missing job folders before boot.
+  const healed = healActiveJobStorage();
   const jobs = listJobSummaries();
   const cfg = loadConfig();
   return NextResponse.json({
     config: cfg,
     activeJobId: cfg?.activeJobId ?? null,
     jobs,
+    storageHealed: healed.healed,
     modeAvailability: {
       ...defaultModeAvailability(),
       ...(cfg?.modeAvailability ?? {}),

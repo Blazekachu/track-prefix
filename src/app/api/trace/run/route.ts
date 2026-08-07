@@ -6,6 +6,7 @@ import { loadConfig } from "@/core/job-config";
 import {
   assertSingleTraceAllowed,
   ensureJobForSeries,
+  ensureJobStorage,
   getActiveJobEntry,
   getActiveDbPath,
   jobLockPath,
@@ -77,7 +78,11 @@ export async function POST(req: Request) {
   }
 
   const entry = getActiveJobEntry();
+  if (entry) {
+    ensureJobStorage(entry);
+  }
   const dbPath = getActiveDbPath();
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const lockPath = entry ? jobLockPath(entry) : `${path.resolve(dbPath)}.trace.lock`;
 
   if (fs.existsSync(lockPath)) {
@@ -87,6 +92,24 @@ export async function POST(req: Request) {
         lockPath,
       },
       { status: 409 }
+    );
+  }
+
+  // Touch-open DB so schema exists before the detached tracer starts.
+  try {
+    const { getDb } = await import("@/db/index");
+    const db = getDb(dbPath);
+    db.close();
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Could not create job database.",
+        code: "JOB_STORAGE_MISSING",
+      },
+      { status: 503 }
     );
   }
 

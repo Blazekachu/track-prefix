@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Scan every sat is only available for BTC node + ord (local ord).",
+          "Scan every sat is only available for BTC + ORD nodes (local ord).",
       },
       { status: 403 }
     );

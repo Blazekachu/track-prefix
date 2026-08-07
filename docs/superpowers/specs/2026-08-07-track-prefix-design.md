@@ -66,7 +66,7 @@ No tracing until the wizard completes. Nothing hidden.
 1. **Disclosure** — what the tool does, why a local process is required, what “complete” means (conservation accounted, gap 0).
 2. **Mode pick** — exactly one of:
    - BTC node only (RPC)
-   - BTC node + ord
+   - BTC + ORD nodes
    - Public API (no node)
    - Paid / subscribed public API (key + base URL)
 3. **Permissions** — only fields required for that mode; saved to a gitignored local config.

@@ -33,7 +33,9 @@ export function readLock(): { pid?: number; mode?: string; started_at?: string }
 }
 
 export function writeControl(action: TraceControlAction): void {
-  fs.writeFileSync(controlPath(), action, "utf8");
+  const p = controlPath();
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, action, "utf8");
 }
 
 export function clearControl(): void {

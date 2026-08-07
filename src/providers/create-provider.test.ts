@@ -7,13 +7,22 @@ describe("validateModeCredentials", () => {
   it("requires rpc fields for btc_node", () => {
     expect(() =>
       validateModeCredentials({ mode: "btc_node", modeCredentials: {} })
-    ).toThrow(/rpcUrl/);
+    ).toThrow(/RPC URL/);
     expect(() =>
       validateModeCredentials({
         mode: "btc_node",
         modeCredentials: { rpcUrl: "http://127.0.0.1:8332" },
       })
-    ).toThrow(/rpcUser/);
+    ).toThrow(/RPC user/);
+    expect(() =>
+      validateModeCredentials({
+        mode: "btc_node",
+        modeCredentials: {
+          rpcUrl: "http://127.0.0.1:8332",
+          rpcUser: "u",
+        },
+      })
+    ).toThrow(/RPC password/);
   });
 
   it("requires ordUrl for btc_ord", () => {
@@ -23,9 +32,10 @@ describe("validateModeCredentials", () => {
         modeCredentials: {
           rpcUrl: "http://127.0.0.1:8332",
           rpcUser: "u",
+          rpcPassword: "p",
         },
       })
-    ).toThrow(/ordUrl/);
+    ).toThrow(/ord URL/);
   });
 });
 

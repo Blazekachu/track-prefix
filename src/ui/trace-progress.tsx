@@ -12,6 +12,7 @@ interface TraceData {
   totalSupply: number;
   liveUtxos: number;
   wallets: number;
+  storageHealed?: boolean;
   job: {
     prefix: string;
     seriesId: number;
@@ -40,17 +41,35 @@ const STATUS_COLORS: Record<string, string> = {
   error: "text-terminal-red",
 };
 
-export function TraceProgress() {
+export function TraceProgress({
+  onNewTrack,
+}: {
+  onNewTrack?: () => void;
+} = {}) {
   const [data, setData] = useState<TraceData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [healedHint, setHealedHint] = useState(false);
 
   async function load() {
     try {
       const res = await fetch("/api/trace");
-      if (res.ok) setData(await res.json());
-    } catch {
-      /* ignore */
+      const json = await res.json();
+      if (!res.ok) {
+        setLoadError(json.error || "Failed to load trace status");
+        return;
+      }
+      setLoadError(null);
+      setData(json as TraceData);
+      if (json.storageHealed) {
+        setHealedHint(true);
+        setMsg(
+          "Job folder was missing and recreated empty — prior progress is gone."
+        );
+      }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -116,6 +135,37 @@ export function TraceProgress() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (loadError && !data) {
+    return (
+      <section className="border border-terminal-red/40 rounded p-4 text-sm space-y-2">
+        <p className="text-terminal-red">{loadError}</p>
+        <p className="text-terminal-dim text-xs">
+          Recommended: start a <strong>New track</strong> for a clean job, or
+          Remove the broken entry from TRACKED JOBS. Refreshing may recreate an
+          empty folder for this job.
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          {onNewTrack && (
+            <button
+              type="button"
+              className="px-3 py-1 border border-terminal-green text-terminal-green text-xs"
+              onClick={onNewTrack}
+            >
+              + New track
+            </button>
+          )}
+          <button
+            type="button"
+            className="px-3 py-1 border border-terminal-border text-xs"
+            onClick={() => void load()}
+          >
+            Retry
+          </button>
+        </div>
+      </section>
+    );
   }
 
   if (!data) {
@@ -215,6 +265,24 @@ export function TraceProgress() {
       </div>
 
       {msg && <p className="text-xs text-terminal-dim mb-3">{msg}</p>}
+      {healedHint && (
+        <div className="mb-3 text-xs border border-terminal-amber/40 p-3 space-y-2">
+          <p className="text-terminal-amber">
+            Recommended: run <strong>+ New track</strong> for a clean wizard
+            setup. Or Start tracer on this empty job / Remove it from TRACKED
+            JOBS.
+          </p>
+          {onNewTrack && (
+            <button
+              type="button"
+              className="px-3 py-1 border border-terminal-green text-terminal-green"
+              onClick={onNewTrack}
+            >
+              + New track
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3">
         <div className="flex items-center gap-3">

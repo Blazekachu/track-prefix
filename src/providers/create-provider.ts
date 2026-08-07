@@ -68,8 +68,10 @@ export async function probeProviderConnection(input: {
   ok: boolean;
   tipHeight?: number;
   chain?: string;
+  txindex?: { synced: boolean; best_block_height?: number };
   ord?: { ok: boolean; detail: string };
   error?: string;
+  failedStep?: string;
 }> {
   try {
     if (input.mode === "public_api" || input.mode === "paid_api") {
@@ -81,19 +83,97 @@ export async function probeProviderConnection(input: {
         bases,
       });
       const tipHeight = parseInt(text, 10);
-      return { ok: Number.isFinite(tipHeight), tipHeight };
+      if (!Number.isFinite(tipHeight)) {
+        return {
+          ok: false,
+          failedStep: "tip",
+          error: "API returned an invalid tip height.",
+        };
+      }
+      return { ok: true, tipHeight };
     }
 
     const rpc = rpcConfigFromCredentials(input.modeCredentials);
     const { BitcoinRpcClient } = await import("./bitcoin-rpc");
-    const client = new BitcoinRpcClient(rpc);
-    const info = await client.getblockchaininfo();
+    const client = new BitcoinRpcClient({ ...rpc, timeoutMs: 12_000 });
+
+    let info: { chain: string; blocks: number; headers: number };
+    try {
+      info = await client.getblockchaininfo();
+    } catch (err) {
+      return {
+        ok: false,
+        failedStep: "rpc",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    if (info.chain !== "main") {
+      return {
+        ok: false,
+        tipHeight: info.blocks,
+        chain: info.chain,
+        failedStep: "chain",
+        error: `Node is on "${info.chain}", not mainnet. track-prefix requires a mainnet node.`,
+      };
+    }
+
+    let txindex: { synced: boolean; best_block_height?: number };
+    try {
+      const indexes = await client.getindexinfo();
+      const tx = indexes.txindex;
+      if (!tx) {
+        return {
+          ok: false,
+          tipHeight: info.blocks,
+          chain: info.chain,
+          failedStep: "txindex",
+          error:
+            "txindex is not enabled. Set txindex=1 in bitcoin.conf, restart bitcoind, and wait for the index to sync.",
+        };
+      }
+      txindex = {
+        synced: tx.synced !== false,
+        best_block_height: tx.best_block_height,
+      };
+      if (!txindex.synced) {
+        return {
+          ok: false,
+          tipHeight: info.blocks,
+          chain: info.chain,
+          txindex,
+          failedStep: "txindex",
+          error: `txindex is still syncing${
+            tx.best_block_height != null
+              ? ` (at height ${tx.best_block_height} / tip ${info.blocks})`
+              : ""
+          }. Wait until it finishes before tracing.`,
+        };
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        tipHeight: info.blocks,
+        chain: info.chain,
+        failedStep: "txindex",
+        error:
+          `Could not verify txindex (${err instanceof Error ? err.message : String(err)}). ` +
+          "Bitcoin Core 0.21+ with txindex=1 is required.",
+      };
+    }
 
     let ord: { ok: boolean; detail: string } | undefined;
     if (input.mode === "btc_ord") {
       const ordUrl = input.modeCredentials.ordUrl?.trim();
       if (!ordUrl) {
-        return { ok: false, error: "ordUrl is required for btc_ord" };
+        return {
+          ok: false,
+          tipHeight: info.blocks,
+          chain: info.chain,
+          txindex,
+          failedStep: "ord",
+          error: "ord URL is required for BTC + ORD nodes.",
+        };
       }
       const provider = new LocalOrdProvider(rpc, ordUrl, 0);
       ord = await provider.checkOrdReachable();
@@ -102,8 +182,10 @@ export async function probeProviderConnection(input: {
           ok: false,
           tipHeight: info.blocks,
           chain: info.chain,
+          txindex,
           ord,
-          error: `ord unreachable: ${ord.detail}`,
+          failedStep: "ord",
+          error: `Cannot reach ord at ${ordUrl}: ${ord.detail}. Is ord running and is the URL/port correct?`,
         };
       }
     }
@@ -112,11 +194,13 @@ export async function probeProviderConnection(input: {
       ok: true,
       tipHeight: info.blocks,
       chain: info.chain,
+      txindex,
       ord,
     };
   } catch (err) {
     return {
       ok: false,
+      failedStep: "unknown",
       error: err instanceof Error ? err.message : String(err),
     };
   }

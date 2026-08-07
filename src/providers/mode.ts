@@ -42,13 +42,18 @@ export function validateModeCredentials(input: {
   }
   if (input.mode === "btc_node" || input.mode === "btc_ord") {
     if (!input.modeCredentials.rpcUrl?.trim()) {
-      throw new Error(`${input.mode} requires modeCredentials.rpcUrl`);
+      throw new Error(`${input.mode} requires RPC URL`);
     }
     if (!input.modeCredentials.rpcUser?.trim()) {
-      throw new Error(`${input.mode} requires modeCredentials.rpcUser`);
+      throw new Error(`${input.mode} requires RPC user`);
+    }
+    if (!input.modeCredentials.rpcPassword) {
+      throw new Error(
+        `${input.mode} requires RPC password (from bitcoin.conf or .cookie)`
+      );
     }
     if (input.mode === "btc_ord" && !input.modeCredentials.ordUrl?.trim()) {
-      throw new Error("btc_ord requires modeCredentials.ordUrl");
+      throw new Error("btc_ord requires ord URL");
     }
   }
 }

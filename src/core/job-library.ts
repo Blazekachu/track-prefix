@@ -54,6 +54,8 @@ export interface JobSummary extends JobEntry {
   queueSize: number;
   isRunning: boolean;
   isActive: boolean;
+  /** True when data/jobs/<id>/ is missing on disk (e.g. manually deleted). */
+  storageMissing: boolean;
 }
 
 export function assertCanCreateNewTrack(mode: DataMode): void {
@@ -102,6 +104,77 @@ export function jobProviderHealthPath(entry: JobEntry): string {
 
 export function jobSnapshotPath(entry: JobEntry): string {
   return path.join(path.resolve(process.cwd(), entry.folder), "tracker-data.json");
+}
+
+/** Absolute folder for a registry entry. */
+export function jobFolderAbs(entry: JobEntry): string {
+  return path.resolve(process.cwd(), entry.folder);
+}
+
+export function jobStoragePresent(entry: JobEntry): boolean {
+  return fs.existsSync(jobFolderAbs(entry));
+}
+
+/**
+ * Recreate the job folder if it was deleted. Does not restore track.db —
+ * a fresh empty DB is created on next getDb().
+ */
+export function ensureJobStorage(entry: JobEntry): { healed: boolean } {
+  const abs = jobFolderAbs(entry);
+  if (fs.existsSync(abs)) return { healed: false };
+  fs.mkdirSync(abs, { recursive: true });
+  return { healed: true };
+}
+
+/** Heal the active job's folder so dashboard/Start can open a DB again. */
+export function healActiveJobStorage(): {
+  healed: boolean;
+  entry: JobEntry | null;
+} {
+  const entry = getActiveJobEntry();
+  if (!entry) return { healed: false, entry: null };
+  const { healed } = ensureJobStorage(entry);
+  return { healed, entry };
+}
+
+/**
+ * Remove a job from the registry (and optionally delete its folder).
+ * Clears activeJobId when the removed job was active.
+ */
+export function removeJob(
+  id: string,
+  opts: { deleteFiles?: boolean } = {}
+): void {
+  const entry = getJobById(id);
+  if (!entry) throw new Error(`Unknown job id: ${id}`);
+
+  if (readLockForEntry(entry).running) {
+    throw new Error(
+      "This job's tracer is still running. Pause/stop it before removing the job."
+    );
+  }
+
+  const reg = loadRegistry();
+  reg.jobs = reg.jobs.filter((j) => j.id !== id);
+  saveRegistry(reg);
+
+  if (opts.deleteFiles !== false) {
+    const abs = jobFolderAbs(entry);
+    if (fs.existsSync(abs)) {
+      fs.rmSync(abs, { recursive: true, force: true });
+    }
+  }
+
+  const cfg = loadConfig();
+  if (cfg?.activeJobId === id) {
+    const next: TrackPrefixConfig = {
+      ...cfg,
+      activeJobId: undefined,
+      job: null,
+      wizardComplete: reg.jobs.length > 0 ? cfg.wizardComplete : false,
+    };
+    saveConfig(next);
+  }
 }
 
 function ensureDirs(): void {
@@ -166,7 +239,10 @@ export function ensureJobForSeries(input: {
   if (!cfg) throw new Error("No config. Complete setup first.");
 
   const existing = findJobByPrefixSeries(input.prefix, input.seriesId);
-  if (existing) return setActiveJob(existing.id);
+  if (existing) {
+    ensureJobStorage(existing);
+    return setActiveJob(existing.id);
+  }
 
   const range = buildSeriesRanges(input.prefix).find(
     (s) => s.id === input.seriesId
@@ -253,11 +329,17 @@ function readLockForEntry(entry: JobEntry): {
 
 export function summarizeJob(entry: JobEntry, activeJobId: string | null): JobSummary {
   const dbPath = jobDbPath(entry);
-  const meta = readJobTraceMeta(dbPath);
-  const lock = readLockForEntry(entry);
+  const storageMissing = !jobStoragePresent(entry);
+  const meta = storageMissing
+    ? { traceStatus: null, lastRun: null, queueSize: 0 }
+    : readJobTraceMeta(dbPath);
+  const lock = storageMissing
+    ? { running: false, pid: null }
+    : readLockForEntry(entry);
   return {
     ...entry,
     dbPath,
+    storageMissing,
     traceStatus: lock.running
       ? meta.traceStatus === "refreshing"
         ? "refreshing"
@@ -336,6 +418,8 @@ export function createJob(input: {
 export function setActiveJob(id: string): JobEntry {
   const entry = getJobById(id);
   if (!entry) throw new Error(`Unknown job id: ${id}`);
+
+  ensureJobStorage(entry);
 
   if (findRunningJob() && !readLockForEntry(entry).running) {
     throw new Error(

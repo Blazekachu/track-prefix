@@ -22,6 +22,7 @@ export type JobSummary = {
   isRunning: boolean;
   isActive: boolean;
   dbPath: string;
+  storageMissing?: boolean;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -85,6 +86,32 @@ export function JobLibrary({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to switch job");
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeTrackedJob(id: string) {
+    if (
+      !window.confirm(
+        "Remove this job from the library and delete its local database folder?"
+      )
+    ) {
+      return;
+    }
+    setBusy(id);
+    setError(null);
+    try {
+      const res = await fetch("/api/jobs/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to remove job");
       window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -190,6 +217,11 @@ export function JobLibrary({
                       ● tracing
                     </span>
                   )}
+                  {j.storageMissing && (
+                    <span className="ml-2 text-terminal-red text-xs">
+                      FILES MISSING
+                    </span>
+                  )}
                 </div>
                 <div className="text-terminal-dim text-xs mt-1">
                   {Number(j.satCount).toLocaleString("en-US")} sats ·{" "}
@@ -203,18 +235,44 @@ export function JobLibrary({
                     </>
                   )}
                   {j.queueSize > 0 && <> · queue {j.queueSize}</>}
+                  {j.storageMissing && (
+                    <>
+                      {" "}
+                      · folder gone — recommended: New track, or Remove this
+                      job
+                    </>
+                  )}
                 </div>
               </div>
-              {!j.isActive && (
+              <div className="flex gap-2">
+                {j.storageMissing && onNewTrack && (
+                  <button
+                    type="button"
+                    className="px-3 py-1 border border-terminal-green text-terminal-green text-xs"
+                    onClick={onNewTrack}
+                  >
+                    + New track
+                  </button>
+                )}
+                {!j.isActive && (
+                  <button
+                    type="button"
+                    disabled={busy === j.id}
+                    className="px-3 py-1 border border-terminal-border text-xs hover:border-terminal-green"
+                    onClick={() => void selectJob(j.id)}
+                  >
+                    {busy === j.id ? "Switching…" : "Open"}
+                  </button>
+                )}
                 <button
                   type="button"
-                  disabled={busy === j.id}
-                  className="px-3 py-1 border border-terminal-border text-xs hover:border-terminal-green"
-                  onClick={() => void selectJob(j.id)}
+                  disabled={busy === j.id || j.isRunning}
+                  className="px-3 py-1 border border-terminal-red/50 text-terminal-red text-xs hover:border-terminal-red disabled:opacity-40"
+                  onClick={() => void removeTrackedJob(j.id)}
                 >
-                  {busy === j.id ? "Switching…" : "Open"}
+                  Remove
                 </button>
-              )}
+              </div>
             </li>
           ))}
         </ul>

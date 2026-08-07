@@ -1,4 +1,6 @@
 import Database from "better-sqlite3";
+import fs from "fs";
+import path from "path";
 import { SERIES } from "@/core/series";
 import { WALLET_LABELS } from "@/core/wallet-labels";
 import { loadConfig } from "@/core/job-config";
@@ -258,12 +260,14 @@ export function seedWalletLabels(db: Database.Database): void {
 }
 
 export function getDb(dbPath?: string): Database.Database {
-  const path =
+  const resolved =
     dbPath ||
     (process.env.DATABASE_PATH
       ? process.env.DATABASE_PATH
       : getActiveDbPath());
-  const db = new Database(path);
+  // Parent folder may be missing if the user deleted data/jobs/<id>/.
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  const db = new Database(resolved);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   initSchema(db);

@@ -256,7 +256,7 @@ export function InscriptionProgress() {
             ) : (
               <p>
                 Public/paid API: first-sat only (keeps rate limits sane). Switch to{" "}
-                <strong>BTC node + ord</strong> for every-sat scans.
+                <strong>BTC + ORD nodes</strong> for every-sat scans.
               </p>
             )}
             {data.lastRun && (

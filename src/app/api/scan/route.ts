@@ -66,7 +66,7 @@ export async function GET() {
           ? "every sat in each UTXO tracked range (+ outpoint first sat)"
           : "1 sat per UTXO (first sat of the outpoint)",
       blockReason: !modeCanInscriptionScan(mode)
-        ? "Current mode has no inscription index. Use BTC node + ord (or public/paid API)."
+        ? "Current mode has no inscription index. Use BTC + ORD nodes (or public/paid API)."
         : !positionComplete
           ? "Finish UTXO position tracking (gap 0, status complete) before scanning inscriptions."
           : traceRunning

@@ -41,16 +41,21 @@ export function SeriesCards() {
   const [series, setSeries] = useState<PrefixSeriesRow[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/prefix-series");
-      if (!res.ok) return;
       const json = await res.json();
+      if (!res.ok) {
+        setLoadError(json.error || "Failed to load prefix series");
+        return;
+      }
+      setLoadError(null);
       setPrefix(json.prefix as string);
       setSeries(json.series as PrefixSeriesRow[]);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -108,6 +113,21 @@ export function SeriesCards() {
     } finally {
       setBusy(null);
     }
+  }
+
+  if (loadError && series.length === 0) {
+    return (
+      <section className="border border-terminal-red/40 rounded p-4 text-sm space-y-2">
+        <p className="text-terminal-red">{loadError}</p>
+        <button
+          type="button"
+          className="px-3 py-1 border border-terminal-border text-xs"
+          onClick={() => void load()}
+        >
+          Retry
+        </button>
+      </section>
+    );
   }
 
   if (series.length === 0) {

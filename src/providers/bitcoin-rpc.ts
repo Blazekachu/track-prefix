@@ -52,9 +52,15 @@ export class BitcoinRpcClient {
         }),
         signal: controller.signal,
       });
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(
+          `RPC authentication failed (HTTP ${res.status}) at ${this.url}. ` +
+            "Check RPC user and password, or use Fill from Bitcoin cookie."
+        );
+      }
       if (!res.ok) {
         throw new Error(
-          `Bitcoin RPC HTTP ${res.status} on ${method}: ${res.statusText}`
+          `Bitcoin RPC HTTP ${res.status} on ${method} at ${this.url}: ${res.statusText}`
         );
       }
       const body = (await res.json()) as JsonRpcResponse<T>;
@@ -66,12 +72,35 @@ export class BitcoinRpcClient {
       return body.result as T;
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
-        throw new Error(`Bitcoin RPC ${method} timed out after ${this.timeoutMs}ms`);
+        throw new Error(
+          `Bitcoin RPC ${method} timed out after ${this.timeoutMs}ms at ${this.url}. ` +
+            "Is bitcoind running and reachable?"
+        );
+      }
+      if (err instanceof Error) {
+        const msg = err.message;
+        if (
+          /ECONNREFUSED|fetch failed|network|ENOTFOUND|ECONNRESET/i.test(msg) ||
+          (err.cause instanceof Error &&
+            /ECONNREFUSED|ENOTFOUND|ECONNRESET/i.test(err.cause.message))
+        ) {
+          throw new Error(
+            `Cannot reach bitcoind at ${this.url}. ` +
+              "Is it running? Check RPC URL/port (default mainnet is 8332)."
+          );
+        }
+        throw err;
       }
       throw err;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  getindexinfo(): Promise<
+    Record<string, { synced?: boolean; best_block_height?: number }>
+  > {
+    return this.call("getindexinfo", []);
   }
 
   getblockchaininfo(): Promise<{

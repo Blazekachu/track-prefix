@@ -28,6 +28,7 @@ type BootState =
 export default function Page() {
   const [boot, setBoot] = useState<BootState>({ status: "loading" });
   const [showWizard, setShowWizard] = useState(false);
+  const [storageNotice, setStorageNotice] = useState<string | null>(null);
   const [modeAvailability, setModeAvailability] = useState<
     Record<DataMode, "ready" | "coming_soon">
   >({
@@ -43,6 +44,11 @@ export default function Page() {
         const res = await fetch("/api/config");
         const json = await res.json();
         if (json.modeAvailability) setModeAvailability(json.modeAvailability);
+        if (json.storageHealed) {
+          setStorageNotice(
+            "Job files under data/jobs/ were missing. An empty folder was recreated so the dashboard can load, but prior UTXO progress is gone."
+          );
+        }
         const jobs = json.jobs ?? [];
         const hasJobs = jobs.length > 0;
         const hasActive =
@@ -114,11 +120,37 @@ export default function Page() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
+        {storageNotice && (
+          <div className="text-xs border border-terminal-amber/40 p-3 space-y-2">
+            <p className="text-terminal-amber">{storageNotice}</p>
+            <p className="text-terminal-dim">
+              Recommended: start a <strong>New track</strong> (wizard) for a
+              clean job, or Remove the broken entry from TRACKED JOBS. You can
+              also Start on this empty job if you want to reuse it.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                className="px-3 py-1 border border-terminal-green text-terminal-green"
+                onClick={() => setShowWizard(true)}
+              >
+                + New track
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 border border-terminal-border text-terminal-dim"
+                onClick={() => setStorageNotice(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         <JobLibrary compact onNewTrack={() => setShowWizard(true)} />
         <ModeInfoBanner />
         <SeriesCards />
         <NextTarget />
-        <TraceProgress />
+        <TraceProgress onNewTrack={() => setShowWizard(true)} />
         <InscriptionProgress />
         <SeriesDetail />
         <ActivityFeed />

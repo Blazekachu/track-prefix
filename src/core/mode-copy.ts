@@ -18,7 +18,7 @@ export const MODE_CAPABILITIES: Record<DataMode, ModeCapability> = {
     utxoTrace:
       "Yes — position tracking uses public block explorers (rate limits / ISP bans possible).",
     inscriptions:
-      "Optional: after UTXO complete, scan the first sat of each live UTXO (common inscription seat). Every-sat scan needs BTC+ord.",
+      "Optional: after UTXO complete, scan the first sat of each live UTXO (common inscription seat). Every-sat scan needs BTC + ORD nodes.",
     requirements: "Network access only. No bitcoind or ord required.",
     canInscriptionScan: true,
   },
@@ -28,7 +28,7 @@ export const MODE_CAPABILITIES: Record<DataMode, ModeCapability> = {
       "Same as public API, but through your Esplora base URL (higher limits).",
     utxoTrace: "Yes — via your paid Esplora endpoint.",
     inscriptions:
-      "Optional: first-sat-per-UTXO scan after complete. Every-sat needs BTC+ord.",
+      "Optional: first-sat-per-UTXO scan after complete. Every-sat needs BTC + ORD nodes.",
     requirements: "API base URL (+ optional key).",
     canInscriptionScan: true,
   },
@@ -39,12 +39,12 @@ export const MODE_CAPABILITIES: Record<DataMode, ModeCapability> = {
     utxoTrace:
       "Yes — full position tracking with txindex (Core 24+ recommended for Refresh spends).",
     inscriptions:
-      "Not available — RPC has no inscription index. Use BTC node + ord (or public API scan) for inscription tracking.",
+      "Not available — RPC has no inscription index. Use BTC + ORD nodes (or public API scan) for inscription tracking.",
     requirements: "Mainnet bitcoind with txindex=1. DB still stored under data/jobs/.",
     canInscriptionScan: false,
   },
   btc_ord: {
-    label: "BTC node + ord",
+    label: "BTC + ORD nodes",
     summary:
       "UTXO FIFO via bitcoind; inscription metadata via your local ord after position track completes.",
     utxoTrace: "Yes — same bitcoind FIFO walk as BTC node alone.",
