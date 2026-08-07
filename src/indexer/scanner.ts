@@ -123,9 +123,9 @@ export class InscriptionScanner {
 
       for (const sat of satsToCheck) {
         const satStr = sat.toString();
+        satsChecked++;
         try {
           const info = await this.provider.getSat(satStr);
-          satsChecked++;
           if (info.inscriptions && info.inscriptions.length > 0) {
             for (const inscId of info.inscriptions) {
               upsertInscription(this.db, {

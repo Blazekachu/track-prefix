@@ -294,12 +294,22 @@ export function InscriptionProgress() {
           </span>
           <div className="text-terminal-bright font-bold">
             {data.satsChecked.toLocaleString("en-US")}
-            {data.scanMode !== "every_sat" && data.utxosDone > 0 && (
-              <span className="text-terminal-dim text-xs font-normal">
-                {" "}
-                (= {data.utxosDone} UTXOs × 1)
-              </span>
-            )}
+            {data.scanMode !== "every_sat" &&
+              data.utxosDone > 0 &&
+              data.satsChecked === data.utxosDone && (
+                <span className="text-terminal-dim text-xs font-normal">
+                  {" "}
+                  (1 per UTXO)
+                </span>
+              )}
+            {data.scanMode !== "every_sat" &&
+              data.utxosDone > 0 &&
+              data.satsChecked !== data.utxosDone && (
+                <span className="text-terminal-amber text-xs font-normal">
+                  {" "}
+                  (UTXOs done {data.utxosDone} — re-scan if counts disagree)
+                </span>
+              )}
           </div>
         </div>
         <div>
