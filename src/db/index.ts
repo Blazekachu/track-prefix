@@ -68,9 +68,25 @@ export function initSchema(db: Database.Database): void {
       kind TEXT NOT NULL DEFAULT 'unknown'
     );
 
+    CREATE TABLE IF NOT EXISTS scan_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      status TEXT NOT NULL DEFAULT 'idle',
+      utxos_total INTEGER NOT NULL DEFAULT 0,
+      utxos_done INTEGER NOT NULL DEFAULT 0,
+      sats_checked INTEGER NOT NULL DEFAULT 0,
+      inscriptions_found INTEGER NOT NULL DEFAULT 0,
+      last_outpoint TEXT,
+      last_run TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Migration: add last_moved if missing
     CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY);
   `);
+
+  // Ensure scan_state row exists
+  db.prepare(
+    `INSERT OR IGNORE INTO scan_state (id, status) VALUES (1, 'idle')`
+  ).run();
 
   // Add last_moved column if it doesn't exist
   const cols = db.pragma('table_info(utxos)') as Array<{ name: string }>;

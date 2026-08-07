@@ -48,6 +48,8 @@ track-prefix.db-shm
 track-prefix-backup-*
 track-prefix.db.trace.lock
 *.trace.control
+*.scan.lock
+*.scan.control
 config.json
 .track-prefix.env
 provider-health.json

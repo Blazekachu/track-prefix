@@ -9,6 +9,8 @@ import { SeriesDetail } from "@/ui/series-detail";
 import { ActivityFeed } from "@/ui/activity-feed";
 import { Wizard } from "@/ui/wizard";
 import { JobLibrary } from "@/ui/job-library";
+import { ModeInfoBanner } from "@/ui/mode-info";
+import { InscriptionProgress } from "@/ui/inscription-progress";
 import type { DataMode } from "@/core/job-config";
 
 type BootState =
@@ -113,9 +115,11 @@ export default function Page() {
       <Header />
       <main className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
         <JobLibrary compact onNewTrack={() => setShowWizard(true)} />
+        <ModeInfoBanner />
         <SeriesCards />
         <NextTarget />
         <TraceProgress />
+        <InscriptionProgress />
         <SeriesDetail />
         <ActivityFeed />
       </main>

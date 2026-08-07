@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { DataMode, TrackPrefixConfig } from "@/core/job-config";
+import { MODE_CAPABILITIES } from "@/core/mode-copy";
 
 type SeriesInfo = {
   id: number;
@@ -13,10 +14,10 @@ type SeriesInfo = {
 };
 
 const MODE_LABELS: Record<DataMode, string> = {
-  public_api: "Public API (no node)",
-  paid_api: "Paid / subscribed API",
-  btc_node: "BTC node (RPC)",
-  btc_ord: "BTC node + ord",
+  public_api: MODE_CAPABILITIES.public_api.label,
+  paid_api: MODE_CAPABILITIES.paid_api.label,
+  btc_node: MODE_CAPABILITIES.btc_node.label,
+  btc_ord: MODE_CAPABILITIES.btc_ord.label,
 };
 
 export function Wizard({
@@ -248,6 +249,11 @@ export function Wizard({
                 />
                 {MODE_LABELS[m]}
                 {disabled ? " — coming soon" : ""}
+                {!disabled && (
+                  <p className="text-xs text-terminal-dim mt-1 ml-5">
+                    {MODE_CAPABILITIES[m].summary}
+                  </p>
+                )}
               </label>
             );
           })}

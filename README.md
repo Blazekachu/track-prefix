@@ -39,6 +39,15 @@ A browser tab cannot finish a multi-day public-API sync. Rate limits, ISP blocks
 
 Node modes are **not** limited to one tracer at a time (unlike public/paid API). URLs are free-form — you can point at other ports for connectivity smoke tests, but real prefix tracing expects mainnet.
 
+After UTXO position track is **complete** (conservation gap 0):
+
+- **BTC + ord** / public / paid — dashboard **Inscription track** panel: Start / Pause / Stop / Resume (samples sats in live UTXOs via ord or ordinals.com).
+- **BTC node only** — panel explains inscriptions are unavailable without ord.
+
+```bash
+npm run scan:inscriptions   # same worker the dashboard starts
+```
+
 ## What to expect
 
 - **First sync** of a large mined series (tens/hundreds of millions of sats) can take **hours to weeks** on public APIs.

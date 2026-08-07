@@ -489,3 +489,66 @@ export function updateTraceState(db: Database.Database, state: TraceStateInput):
       last_run = datetime('now')
   `).run(state.last_traced_txid, state.last_traced_depth, state.total_utxos_found, state.fee_sats_retraced, state.status);
 }
+
+// --- Inscription scan state ---
+
+export interface ScanStateRow {
+  id: number;
+  status: string;
+  utxos_total: number;
+  utxos_done: number;
+  sats_checked: number;
+  inscriptions_found: number;
+  last_outpoint: string | null;
+  last_run: string;
+}
+
+export interface ScanStateInput {
+  status: string;
+  utxos_total: number;
+  utxos_done: number;
+  sats_checked: number;
+  inscriptions_found: number;
+  last_outpoint: string | null;
+}
+
+export function getScanState(db: Database.Database): ScanStateRow | null {
+  return (
+    (db.prepare("SELECT * FROM scan_state WHERE id = 1").get() as
+      | ScanStateRow
+      | undefined) || null
+  );
+}
+
+export function updateScanState(db: Database.Database, state: ScanStateInput): void {
+  db.prepare(`
+    INSERT INTO scan_state (
+      id, status, utxos_total, utxos_done, sats_checked,
+      inscriptions_found, last_outpoint, last_run
+    )
+    VALUES (1, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      utxos_total = excluded.utxos_total,
+      utxos_done = excluded.utxos_done,
+      sats_checked = excluded.sats_checked,
+      inscriptions_found = excluded.inscriptions_found,
+      last_outpoint = excluded.last_outpoint,
+      last_run = datetime('now')
+  `).run(
+    state.status,
+    state.utxos_total,
+    state.utxos_done,
+    state.sats_checked,
+    state.inscriptions_found,
+    state.last_outpoint
+  );
+}
+
+export function countInscriptions(db: Database.Database): number {
+  const row = db.prepare("SELECT COUNT(*) as cnt FROM inscriptions").get() as {
+    cnt: number;
+  };
+  return row.cnt;
+}
+

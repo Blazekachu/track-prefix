@@ -15,6 +15,7 @@
     "trace:repair": "npx tsx scripts/index-sats.ts repair --no-scan",
     "trace:reset": "npx tsx scripts/reset-trace-db.ts",
     "refresh": "npx tsx scripts/index-sats.ts refresh",
+    "scan:inscriptions": "npx tsx scripts/scan-inscriptions.ts",
     "status": "npx tsx scripts/status.ts",
     "snapshot": "npx tsx scripts/export-snapshot.ts",
     "auto-trace": "npx tsx scripts/auto-trace.ts"
