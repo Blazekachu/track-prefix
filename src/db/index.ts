@@ -191,7 +191,7 @@ export function seedWalletLabels(db: Database.Database): void {
 }
 
 export function getDb(dbPath?: string): Database.Database {
-  const path = dbPath || process.env.DATABASE_PATH || "./bhang-tracker.db";
+  const path = dbPath || process.env.DATABASE_PATH || "./track-prefix.db";
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");

@@ -1,5 +1,4 @@
 import type Database from "better-sqlite3";
-import { SERIES } from "@/core/series";
 
 export interface SeriesRow {
   id: number;
@@ -18,6 +17,15 @@ export function getSeries(db: Database.Database): SeriesRow[] {
 
 export function getSeriesById(db: Database.Database, id: number): SeriesRow | null {
   return (db.prepare("SELECT * FROM series WHERE id = ?").get(id) as SeriesRow) || null;
+}
+
+function seriesBounds(
+  db: Database.Database,
+  seriesId: number
+): { start: string; end: string } | null {
+  const series = getSeriesById(db, seriesId);
+  if (!series) return null;
+  return { start: series.sat_start, end: series.sat_end };
 }
 
 export interface UtxoRow {
@@ -69,10 +77,10 @@ export function upsertUtxo(db: Database.Database, utxo: UtxoInput): void {
 }
 
 export function getUtxosBySeries(db: Database.Database, seriesId: number): UtxoRow[] {
-  const series = SERIES[seriesId - 1];
-  if (!series) return [];
-  const start = series.satStart.toString();
-  const end = series.satEnd.toString();
+  const bounds = seriesBounds(db, seriesId);
+  if (!bounds) return [];
+  const start = bounds.start;
+  const end = bounds.end;
   return db.prepare(`
     SELECT * FROM utxos
     WHERE sat_range_start <= ? AND sat_range_end >= ?
@@ -111,10 +119,10 @@ export interface UtxoStats {
 }
 
 export function getUtxoStats(db: Database.Database, seriesId: number): UtxoStats {
-  const series = SERIES[seriesId - 1];
-  if (!series) return { utxo_count: 0, wallet_count: 0, total_sats: 0, inscribed_count: 0 };
-  const start = series.satStart.toString();
-  const end = series.satEnd.toString();
+  const bounds = seriesBounds(db, seriesId);
+  if (!bounds) return { utxo_count: 0, wallet_count: 0, total_sats: 0, inscribed_count: 0 };
+  const start = bounds.start;
+  const end = bounds.end;
 
   const row = db.prepare(`
     SELECT
@@ -160,10 +168,10 @@ export function upsertInscription(db: Database.Database, ins: InscriptionInput):
 }
 
 export function getInscriptionsBySeries(db: Database.Database, seriesId: number): InscriptionRow[] {
-  const series = SERIES[seriesId - 1];
-  if (!series) return [];
-  const start = series.satStart.toString();
-  const end = series.satEnd.toString();
+  const bounds = seriesBounds(db, seriesId);
+  if (!bounds) return [];
+  const start = bounds.start;
+  const end = bounds.end;
   return db.prepare(`
     SELECT i.* FROM inscriptions i
     WHERE CAST(i.sat_number AS REAL) >= CAST(? AS REAL)
@@ -245,14 +253,14 @@ export function deleteTrace(db: Database.Database, id: number): void {
 }
 
 export function deleteQueuedRangesCoveredByLiveUtxos(db: Database.Database, seriesId: number): number {
-  const series = SERIES[seriesId - 1];
-  if (!series) return 0;
+  const bounds = seriesBounds(db, seriesId);
+  if (!bounds) return 0;
 
   const queued = db.prepare(`
     SELECT id, sat_range_start, sat_range_end
     FROM trace_queue
     WHERE sat_range_start <= ? AND sat_range_end >= ?
-  `).all(series.satEnd.toString(), series.satStart.toString()) as Array<{
+  `).all(bounds.end, bounds.start) as Array<{
     id: number;
     sat_range_start: string;
     sat_range_end: string;
@@ -263,7 +271,7 @@ export function deleteQueuedRangesCoveredByLiveUtxos(db: Database.Database, seri
     FROM utxos
     WHERE sat_range_start <= ? AND sat_range_end >= ? AND spent = 0
     ORDER BY sat_range_start, sat_range_end
-  `).all(series.satEnd.toString(), series.satStart.toString()) as Array<{
+  `).all(bounds.end, bounds.start) as Array<{
     sat_range_start: string;
     sat_range_end: string;
   }>;
@@ -320,8 +328,9 @@ export interface TraceGap {
 }
 
 export function getTraceAccounting(db: Database.Database, seriesId: number): TraceAccounting {
-  const series = SERIES[seriesId - 1];
-  if (!series) {
+  const bounds = seriesBounds(db, seriesId);
+  const row = getSeriesById(db, seriesId);
+  if (!bounds || !row) {
     return {
       live_sats: 0n,
       queued_sats: 0n,
@@ -332,8 +341,8 @@ export function getTraceAccounting(db: Database.Database, seriesId: number): Tra
     };
   }
 
-  const start = series.satStart.toString();
-  const end = series.satEnd.toString();
+  const start = bounds.start;
+  const end = bounds.end;
   const liveRows = db.prepare(`
     SELECT sat_range_start, sat_range_end
     FROM utxos
@@ -346,8 +355,8 @@ export function getTraceAccounting(db: Database.Database, seriesId: number): Tra
     WHERE sat_range_start <= ? AND sat_range_end >= ?
   `).all(end, start) as Array<{ sat_range_start: string; sat_range_end: string }>;
 
-  const seriesStart = series.satStart;
-  const seriesEnd = series.satEnd;
+  const seriesStart = BigInt(bounds.start);
+  const seriesEnd = BigInt(bounds.end);
   const rangeSize = (row: { sat_range_start: string; sat_range_end: string }) => {
     const clippedStart = BigInt(row.sat_range_start) > seriesStart ? BigInt(row.sat_range_start) : seriesStart;
     const clippedEnd = BigInt(row.sat_range_end) < seriesEnd ? BigInt(row.sat_range_end) : seriesEnd;
@@ -386,7 +395,7 @@ export function getTraceAccounting(db: Database.Database, seriesId: number): Tra
     accountedSats += currentEnd - currentStart + 1n;
   }
 
-  const targetSats = series.satCount;
+  const targetSats = BigInt(row.sat_count);
 
   return {
     live_sats: liveSats,
@@ -399,11 +408,13 @@ export function getTraceAccounting(db: Database.Database, seriesId: number): Tra
 }
 
 export function getTraceGaps(db: Database.Database, seriesId: number): TraceGap[] {
-  const series = SERIES[seriesId - 1];
-  if (!series) return [];
+  const bounds = seriesBounds(db, seriesId);
+  if (!bounds) return [];
 
-  const start = series.satStart.toString();
-  const end = series.satEnd.toString();
+  const seriesStart = BigInt(bounds.start);
+  const seriesEnd = BigInt(bounds.end);
+  const start = bounds.start;
+  const end = bounds.end;
   const rows = [
     ...db.prepare(`
       SELECT sat_range_start, sat_range_end
@@ -419,14 +430,14 @@ export function getTraceGaps(db: Database.Database, seriesId: number): TraceGap[
 
   const intervals = rows
     .map((row) => ({
-      start: BigInt(row.sat_range_start) > series.satStart ? BigInt(row.sat_range_start) : series.satStart,
-      end: BigInt(row.sat_range_end) < series.satEnd ? BigInt(row.sat_range_end) : series.satEnd,
+      start: BigInt(row.sat_range_start) > seriesStart ? BigInt(row.sat_range_start) : seriesStart,
+      end: BigInt(row.sat_range_end) < seriesEnd ? BigInt(row.sat_range_end) : seriesEnd,
     }))
     .filter((range) => range.start <= range.end)
     .sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
 
   const gaps: TraceGap[] = [];
-  let cursor = series.satStart;
+  let cursor = seriesStart;
   for (const interval of intervals) {
     if (interval.start > cursor) {
       gaps.push({
@@ -438,11 +449,11 @@ export function getTraceGaps(db: Database.Database, seriesId: number): TraceGap[
     if (interval.end >= cursor) cursor = interval.end + 1n;
   }
 
-  if (cursor <= series.satEnd) {
+  if (cursor <= seriesEnd) {
     gaps.push({
       start: cursor,
-      end: series.satEnd,
-      count: series.satEnd - cursor + 1n,
+      end: seriesEnd,
+      count: seriesEnd - cursor + 1n,
     });
   }
 
@@ -454,10 +465,10 @@ export function clearQueue(db: Database.Database): void {
 }
 
 export function getUnspentUtxos(db: Database.Database, seriesId: number): UtxoRow[] {
-  const series = SERIES[seriesId - 1];
-  if (!series) return [];
-  const start = series.satStart.toString();
-  const end = series.satEnd.toString();
+  const bounds = seriesBounds(db, seriesId);
+  if (!bounds) return [];
+  const start = bounds.start;
+  const end = bounds.end;
   return db.prepare(`
     SELECT * FROM utxos
     WHERE sat_range_start <= ? AND sat_range_end >= ? AND spent = 0

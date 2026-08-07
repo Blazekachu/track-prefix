@@ -16,7 +16,6 @@ import {
   getTraceGaps,
   deleteQueuedRangesCoveredByLiveUtxos,
 } from "@/db/queries";
-import { SERIES } from "@/core/series";
 
 export type TracerMode = "trace" | "refresh" | "repair";
 
@@ -27,10 +26,22 @@ export class CoinbaseTracer {
   private feeSatsRetraced = 0n;
   private visited = new Set<string>();
   private blockTxidsCache = new Map<number, string[]>();
+  private targetRange: SatRange;
+  private originHeights: number[];
+  private seriesId: number;
 
-  constructor(db: Database.Database, provider: OrdProvider) {
+  constructor(
+    db: Database.Database,
+    provider: OrdProvider,
+    targetRange: SatRange,
+    originHeights: number[],
+    seriesId: number = 1
+  ) {
     this.db = db;
     this.provider = provider;
+    this.targetRange = targetRange;
+    this.originHeights = originHeights;
+    this.seriesId = seriesId;
   }
 
   /**
@@ -51,7 +62,7 @@ export class CoinbaseTracer {
     if (mode === "repair") {
       await this.repairMissingCoverage();
       this.cleanupCoveredQueueRows();
-      const accounting = getTraceAccounting(this.db, 1);
+      const accounting = getTraceAccounting(this.db, this.seriesId);
       updateTraceState(this.db, {
         last_traced_txid: null,
         last_traced_depth: 0,
@@ -97,18 +108,14 @@ export class CoinbaseTracer {
 
     console.log(`[tracer] Seeding queue from coinbase TXs...`);
 
-    const series1 = SERIES[0];
-    await this.seedRangeFromCoinbase({
-      start: series1.satStart,
-      end: series1.satEnd,
-    });
+    await this.seedRangeFromCoinbase(this.targetRange);
 
     const seeded = getQueueSize(this.db);
     console.log(`[tracer] Seeded ${seeded} items into queue`);
   }
 
   private async repairMissingCoverage(): Promise<void> {
-    const gaps = getTraceGaps(this.db, 1);
+    const gaps = getTraceGaps(this.db, this.seriesId);
     if (gaps.length === 0) return;
 
     const missing = gaps.reduce((sum, gap) => sum + gap.count, 0n);
@@ -123,14 +130,14 @@ export class CoinbaseTracer {
   }
 
   private cleanupCoveredQueueRows(): void {
-    const deleted = deleteQueuedRangesCoveredByLiveUtxos(this.db, 1);
+    const deleted = deleteQueuedRangesCoveredByLiveUtxos(this.db, this.seriesId);
     if (deleted > 0) {
       console.warn(`[tracer] Removed ${deleted} queued range(s) already covered by live UTXOs`);
     }
   }
 
   private async seedRangeFromCoinbase(targetRange: SatRange): Promise<void> {
-    for (const blockHeight of [579124, 579125]) {
+    for (const blockHeight of this.originHeights) {
       const block = await this.provider.getBlock(blockHeight);
       const coinbaseTxid = block.coinbase_txid;
 
@@ -283,7 +290,7 @@ export class CoinbaseTracer {
     let queueSize = getQueueSize(this.db);
     if (queueSize === 0) {
       console.log(`[tracer] Queue empty — nothing to trace`);
-      const accounting = getTraceAccounting(this.db, 1);
+      const accounting = getTraceAccounting(this.db, this.seriesId);
       const complete = accounting.gap_sats === 0n && accounting.duplicate_sats === 0n;
       updateTraceState(this.db, {
         last_traced_txid: null,
@@ -481,7 +488,7 @@ export class CoinbaseTracer {
       }
     }
 
-    const accounting = getTraceAccounting(this.db, 1);
+    const accounting = getTraceAccounting(this.db, this.seriesId);
     if (accounting.gap_sats !== 0n || accounting.duplicate_sats !== 0n) {
       updateTraceState(this.db, {
         last_traced_txid: null,

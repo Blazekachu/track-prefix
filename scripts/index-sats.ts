@@ -2,6 +2,9 @@ import { getDb } from "../src/db/index";
 import { PublicOrdProvider } from "../src/providers/public-provider";
 import { CoinbaseTracer, type TracerMode } from "../src/indexer/tracer";
 import { InscriptionScanner } from "../src/indexer/scanner";
+import { loadConfig } from "../src/core/job-config";
+import { SERIES } from "../src/core/series";
+import { originBlockHeights } from "../src/core/origin-blocks";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -23,10 +26,10 @@ if (!validModes.includes(mode)) {
 
 async function main() {
   const delayMs = parseInt(process.env.API_DELAY_MS || "350", 10);
-  const dbPath = process.env.DATABASE_PATH || "./bhang-tracker.db";
+  const dbPath = process.env.DATABASE_PATH || "./track-prefix.db";
   const lockPath = `${path.resolve(dbPath)}.trace.lock`;
 
-  console.log(`[indexer] BHANG sat indexer — mode: ${mode}`);
+  console.log(`[indexer] track-prefix sat indexer — mode: ${mode}`);
   console.log(`[indexer] DB: ${dbPath} | API delay: ${delayMs}ms`);
   console.log("");
 
@@ -102,16 +105,38 @@ async function main() {
   const db = getDb(dbPath);
   try {
     const provider = new PublicOrdProvider(delayMs);
-    const tracer = new CoinbaseTracer(db, provider);
+    const cfg = loadConfig();
+    let satStart: bigint;
+    let satEnd: bigint;
+    let seriesId = 1;
+    if (cfg?.job) {
+      satStart = BigInt(cfg.job.satStart);
+      satEnd = BigInt(cfg.job.satEnd);
+      seriesId = cfg.job.seriesId;
+    } else {
+      const series1 = SERIES[0];
+      satStart = series1.satStart;
+      satEnd = series1.satEnd;
+      seriesId = series1.id;
+      console.warn("[indexer] No config.json job — falling back to SERIES[0] (legacy BHANG S1).");
+    }
+
+    const tracer = new CoinbaseTracer(
+      db,
+      provider,
+      { start: satStart, end: satEnd },
+      originBlockHeights(satStart, satEnd),
+      seriesId
+    );
 
     await tracer.run(mode);
 
     if (mode === "trace" && !skipScan) {
       console.log("\n=== Inscription Scanning ===\n");
       const scanner = new InscriptionScanner(db, provider);
-      await scanner.scanSeries(1);
+      await scanner.scanSeries(seriesId);
     } else if (skipScan) {
-      console.log("\n[indexer] Inscription scanning skipped (--no-scan)");
+      console.log("[indexer] Inscription scanning skipped (--no-scan)");
     }
 
     console.log("\n[indexer] Done.");
