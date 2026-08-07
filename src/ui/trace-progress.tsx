@@ -57,7 +57,12 @@ export function TraceProgress() {
   useEffect(() => {
     void load();
     const interval = setInterval(() => void load(), 5000);
-    return () => clearInterval(interval);
+    const onSeriesChange = () => void load();
+    window.addEventListener("track-prefix:series-changed", onSeriesChange);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("track-prefix:series-changed", onSeriesChange);
+    };
   }, []);
 
   async function runTracer(mode: "trace" | "refresh" = "trace") {

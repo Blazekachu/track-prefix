@@ -14,6 +14,9 @@ import {
   shouldBlockNewTrack,
 } from "./job-policy";
 import { isPidAlive } from "./pid";
+import { buildSeriesRanges } from "./series-ranges";
+import { seriesIsMined } from "./forecast";
+import { splitIntoBlocks } from "./segments";
 
 export {
   isApiRateLimitedMode,
@@ -140,6 +143,58 @@ export function saveRegistry(reg: JobRegistry): void {
 
 export function getJobById(id: string): JobEntry | null {
   return loadRegistry().jobs.find((j) => j.id === id) ?? null;
+}
+
+export function findJobByPrefixSeries(
+  prefix: string,
+  seriesId: number
+): JobEntry | null {
+  return (
+    loadRegistry().jobs.find(
+      (j) => j.prefix === prefix && j.seriesId === seriesId
+    ) ?? null
+  );
+}
+
+/** Select or create a job for a mined series; throws if not mined yet. */
+export function ensureJobForSeries(input: {
+  prefix: string;
+  seriesId: number;
+  tipHeight: number;
+}): JobEntry {
+  const cfg = loadConfig();
+  if (!cfg) throw new Error("No config. Complete setup first.");
+
+  const existing = findJobByPrefixSeries(input.prefix, input.seriesId);
+  if (existing) return setActiveJob(existing.id);
+
+  const range = buildSeriesRanges(input.prefix).find(
+    (s) => s.id === input.seriesId
+  );
+  if (!range) {
+    throw new Error(`Unknown series ${input.seriesId} for ${input.prefix}.`);
+  }
+  if (!seriesIsMined(range, BigInt(input.tipHeight))) {
+    throw new Error(
+      `Series ${input.seriesId} is not mined yet — UTXO tracking unlocks at block ${miningTargetBlock(range)}.`
+    );
+  }
+
+  const trackJob: TrackJob = {
+    prefix: input.prefix,
+    seriesId: range.id,
+    nameLength: range.nameLength,
+    satStart: range.satStart.toString(),
+    satEnd: range.satEnd.toString(),
+    satCount: range.satCount.toString(),
+    tipHeightAtStart: input.tipHeight,
+  };
+  return createJob({ job: trackJob, mode: cfg.mode });
+}
+
+function miningTargetBlock(range: { satStart: bigint; satEnd: bigint }): number {
+  const segs = splitIntoBlocks(range.satStart, range.satEnd);
+  return segs.length ? Number(segs[segs.length - 1].height) : 0;
 }
 
 export function getActiveJobEntry(): JobEntry | null {

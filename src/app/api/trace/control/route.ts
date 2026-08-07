@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/index";
 import { getTraceState, updateTraceState } from "@/db/queries";
+import { loadConfig } from "@/core/job-config";
+import { ensureJobForSeries } from "@/core/job-library";
+import { esploraGet } from "@/providers/esplora-client";
 import {
   clearControl,
   killLockedTracer,
@@ -10,7 +13,34 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type Body = { action?: "pause" | "stop" | "resume" };
+type Body = {
+  action?: "pause" | "stop" | "resume";
+  seriesId?: number;
+};
+
+async function fetchTipHeight(): Promise<number> {
+  const text = await esploraGet<string>("/blocks/tip/height", {
+    parse: "text",
+    timeoutMs: 8_000,
+  });
+  const height = parseInt(text, 10);
+  if (!Number.isFinite(height) || height <= 0) {
+    throw new Error("Invalid tip height from providers.");
+  }
+  return height;
+}
+
+async function maybeSelectSeries(seriesId?: number): Promise<void> {
+  if (seriesId == null) return;
+  const cfg = loadConfig();
+  if (!cfg?.job) throw new Error("No active prefix job.");
+  const tipHeight = await fetchTipHeight();
+  ensureJobForSeries({
+    prefix: cfg.job.prefix,
+    seriesId,
+    tipHeight,
+  });
+}
 
 export async function POST(req: Request) {
   let body: Body;
@@ -28,6 +58,15 @@ export async function POST(req: Request) {
     );
   }
 
+  try {
+    await maybeSelectSeries(body.seriesId);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 403 }
+    );
+  }
+
   if (action === "resume") {
     clearControl();
     return NextResponse.json({
@@ -38,7 +77,6 @@ export async function POST(req: Request) {
 
   writeControl(action);
 
-  // Give cooperative pause a moment; stop also kills if still alive.
   if (action === "stop") {
     await new Promise((r) => setTimeout(r, 1500));
     const { killed, pid } = killLockedTracer();
@@ -66,7 +104,6 @@ export async function POST(req: Request) {
     });
   }
 
-  // pause
   const lock = readLock();
   return NextResponse.json({
     ok: true,
