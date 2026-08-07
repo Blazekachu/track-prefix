@@ -60,7 +60,7 @@ export function TraceProgress() {
     return () => clearInterval(interval);
   }, []);
 
-  async function startTrace() {
+  async function runTracer(mode: "trace" | "refresh" = "trace") {
     setBusy(true);
     setMsg(null);
     try {
@@ -69,7 +69,11 @@ export function TraceProgress() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "resume" }),
       });
-      const res = await fetch("/api/trace/run", { method: "POST" });
+      const res = await fetch("/api/trace/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to start tracer");
       setMsg(json.message);
@@ -79,6 +83,14 @@ export function TraceProgress() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function startTrace() {
+    await runTracer("trace");
+  }
+
+  async function startRefresh() {
+    await runTracer("refresh");
   }
 
   async function control(action: "pause" | "stop") {
@@ -135,6 +147,10 @@ export function TraceProgress() {
       data.status === "paused" ||
       data.status === "error" ||
       !data.lastRun);
+  const canRefresh = !running && data.status === "complete";
+  const lastUpdated = data.lastRun
+    ? `${data.lastRun.replace("T", " ").substring(0, 19)} UTC`
+    : null;
 
   return (
     <section className="border border-terminal-green/20 rounded p-4 bg-terminal-surface">
@@ -149,6 +165,16 @@ export function TraceProgress() {
           <span className={`font-bold ${statusColor}`}>{statusLabel}</span>
           {running && (
             <span className="text-terminal-green animate-pulse">●</span>
+          )}
+          {canRefresh && (
+            <button
+              type="button"
+              onClick={() => void startRefresh()}
+              disabled={busy}
+              className="px-3 py-1 border border-terminal-amber text-terminal-amber hover:bg-terminal-amber/10"
+            >
+              {busy ? "…" : "Refresh"}
+            </button>
           )}
           {canStart && (
             <button
@@ -225,9 +251,9 @@ export function TraceProgress() {
             </div>
           </div>
           <div>
-            <span className="text-terminal-dim">Last Run</span>
+            <span className="text-terminal-dim">DB last updated</span>
             <div className="text-terminal-dim">
-              {data.lastRun ? data.lastRun.substring(0, 16) : "Never"}
+              {lastUpdated ?? "Never"}
             </div>
           </div>
         </div>
@@ -246,6 +272,25 @@ export function TraceProgress() {
           <div className="text-terminal-dim text-xs mt-2">
             Range: {job.satStart} → {job.satEnd} ({job.satCount} sats)
           </div>
+        )}
+        {data.status === "complete" && (
+          <p className="text-terminal-dim text-xs mt-2">
+            Trace complete. The DB is a snapshot — it does not auto-update.
+            {lastUpdated ? (
+              <>
+                {" "}
+                Last synced <strong>{lastUpdated}</strong>. Click{" "}
+                <strong>Refresh</strong> to check live UTXOs for on-chain
+                movements.
+              </>
+            ) : (
+              <>
+                {" "}
+                Click <strong>Refresh</strong> to check live UTXOs for
+                movements.
+              </>
+            )}
+          </p>
         )}
         <p className="text-terminal-dim text-xs mt-2">
           Pause finishes the current queue item then stops. Stop force-ends if

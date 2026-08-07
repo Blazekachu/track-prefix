@@ -12,7 +12,18 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+type RunBody = { mode?: "trace" | "refresh" };
+
+export async function POST(req: Request) {
+  let body: RunBody = {};
+  try {
+    body = (await req.json()) as RunBody;
+  } catch {
+    /* default trace mode */
+  }
+
+  const tracerMode = body.mode === "refresh" ? "refresh" : "trace";
+
   const cfg = loadConfig();
   if (!cfg?.job) {
     return NextResponse.json(
@@ -46,7 +57,7 @@ export async function POST() {
 
   const child = spawn(
     "npx",
-    ["tsx", "scripts/index-sats.ts", "trace", "--no-scan"],
+    ["tsx", "scripts/index-sats.ts", tracerMode, "--no-scan"],
     {
       cwd: process.cwd(),
       detached: true,
@@ -62,7 +73,11 @@ export async function POST() {
 
   return NextResponse.json({
     ok: true,
-    message: `Tracer started for ${cfg.job.prefix} series ${cfg.job.seriesId}`,
+    message:
+      tracerMode === "refresh"
+        ? `Refresh started for ${cfg.job.prefix} series ${cfg.job.seriesId}`
+        : `Tracer started for ${cfg.job.prefix} series ${cfg.job.seriesId}`,
+    mode: tracerMode,
     pid: child.pid ?? null,
     dbPath,
   });
