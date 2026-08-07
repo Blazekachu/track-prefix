@@ -1,0 +1,42 @@
+{
+  "name": "bhang-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "npx tsx scripts/seed-db.ts",
+    "index": "npx tsx scripts/index-sats.ts",
+    "trace:sats": "npx tsx scripts/index-sats.ts trace --no-scan",
+    "trace:repair": "npx tsx scripts/index-sats.ts repair --no-scan",
+    "trace:reset": "npx tsx scripts/reset-trace-db.ts",
+    "refresh": "npx tsx scripts/index-sats.ts refresh",
+    "status": "npx tsx scripts/status.ts",
+    "snapshot": "npx tsx scripts/export-snapshot.ts",
+    "auto-trace": "npx tsx scripts/auto-trace.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "next": "16.2.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.4",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "vitest": "^4.1.5"
+  }
+}
