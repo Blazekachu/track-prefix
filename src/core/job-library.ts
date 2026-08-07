@@ -41,6 +41,34 @@ export interface JobSummary extends JobEntry {
   isActive: boolean;
 }
 
+export function isApiRateLimitedMode(mode: DataMode): boolean {
+  return mode === "public_api" || mode === "paid_api";
+}
+
+/** Public/paid API: block new track while any trace is running or paused. */
+export function shouldBlockNewTrack(
+  mode: DataMode,
+  jobs: Pick<JobSummary, "isActive" | "isRunning" | "traceStatus">[]
+): boolean {
+  if (!isApiRateLimitedMode(mode)) return false;
+  if (jobs.some((j) => j.isRunning)) return true;
+  const active = jobs.find((j) => j.isActive);
+  if (!active) return false;
+  return (
+    active.traceStatus === "paused" ||
+    active.traceStatus === "tracing" ||
+    active.traceStatus === "refreshing"
+  );
+}
+
+export function assertCanCreateNewTrack(mode: DataMode): void {
+  if (!isApiRateLimitedMode(mode)) return;
+  const jobs = listJobSummaries();
+  if (shouldBlockNewTrack(mode, jobs)) {
+    throw new Error("Stop present Track to proceed with new");
+  }
+}
+
 const DATA_DIR = "data";
 const JOBS_DIR = path.join(DATA_DIR, "jobs");
 const REGISTRY_FILE = path.join(DATA_DIR, "registry.json");

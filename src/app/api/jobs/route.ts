@@ -9,7 +9,7 @@ import {
 import {
   createJob,
   listJobSummaries,
-  setActiveJob,
+  assertCanCreateNewTrack,
 } from "@/core/job-library";
 import { validatePrefix } from "@/core/prefix";
 import { buildSeriesRanges } from "@/core/series-ranges";
@@ -55,6 +55,15 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: `Mode ${body.mode} is not available yet.` },
       { status: 400 }
+    );
+  }
+
+  try {
+    assertCanCreateNewTrack(body.mode);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 409 }
     );
   }
 

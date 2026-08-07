@@ -1,22 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { DataMode } from "@/core/job-config";
+import {
+  shouldBlockNewTrack,
+  isApiRateLimitedMode,
+  type JobSummary,
+} from "@/core/job-library";
 
-export type JobSummary = {
-  id: string;
-  prefix: string;
-  seriesId: number;
-  satCount: string;
-  nameLength: number;
-  createdAt: string;
-  lastOpenedAt: string;
-  traceStatus: string | null;
-  lastRun: string | null;
-  queueSize: number;
-  isRunning: boolean;
-  isActive: boolean;
-  dbPath: string;
-};
+export type { JobSummary };
 
 const STATUS_LABELS: Record<string, string> = {
   idle: "idle",
@@ -27,6 +19,8 @@ const STATUS_LABELS: Record<string, string> = {
   error: "error",
 };
 
+const NEW_TRACK_BLOCKED_MSG = "Stop present Track to proceed with new";
+
 export function JobLibrary({
   onNewTrack,
   compact = false,
@@ -36,17 +30,26 @@ export function JobLibrary({
 }) {
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [mode, setMode] = useState<DataMode>("public_api");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(!compact);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/jobs");
-      if (!res.ok) return;
-      const json = await res.json();
-      setJobs(json.jobs as JobSummary[]);
-      setActiveJobId(json.activeJobId ?? null);
+      const [jobsRes, cfgRes] = await Promise.all([
+        fetch("/api/jobs"),
+        fetch("/api/config"),
+      ]);
+      if (jobsRes.ok) {
+        const json = await jobsRes.json();
+        setJobs(json.jobs as JobSummary[]);
+        setActiveJobId(json.activeJobId ?? null);
+      }
+      if (cfgRes.ok) {
+        const json = await cfgRes.json();
+        if (json.config?.mode) setMode(json.config.mode as DataMode);
+      }
     } catch {
       /* ignore */
     }
@@ -77,6 +80,11 @@ export function JobLibrary({
       setBusy(null);
     }
   }
+
+  const blockNewTrack = useMemo(
+    () => shouldBlockNewTrack(mode, jobs),
+    [mode, jobs]
+  );
 
   if (jobs.length === 0) return null;
 
@@ -112,13 +120,30 @@ export function JobLibrary({
             </button>
           )}
           {onNewTrack && (
-            <button
-              type="button"
-              className="px-3 py-1 border border-terminal-green text-terminal-green text-xs"
-              onClick={onNewTrack}
-            >
-              + New track
-            </button>
+            <span className="relative inline-block group">
+              <button
+                type="button"
+                disabled={blockNewTrack}
+                aria-disabled={blockNewTrack}
+                title={blockNewTrack ? NEW_TRACK_BLOCKED_MSG : undefined}
+                className={`px-3 py-1 border text-xs ${
+                  blockNewTrack
+                    ? "border-terminal-border text-terminal-dim opacity-50 cursor-not-allowed"
+                    : "border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                }`}
+                onClick={blockNewTrack ? undefined : onNewTrack}
+              >
+                + New track
+              </button>
+              {blockNewTrack && (
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute right-0 top-full z-20 mt-1 w-max max-w-xs rounded border border-terminal-amber/40 bg-black px-2 py-1 text-[10px] text-terminal-amber opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                >
+                  {NEW_TRACK_BLOCKED_MSG}
+                </span>
+              )}
+            </span>
           )}
         </div>
       </div>
@@ -185,9 +210,16 @@ export function JobLibrary({
 
       <p className="text-terminal-dim text-xs mt-3">
         Each job has its own database under{" "}
-        <code className="text-terminal-bright">data/jobs/</code>. Public API
-        mode allows only one tracer at a time across all jobs — pause/stop before
-        switching or starting another.
+        <code className="text-terminal-bright">data/jobs/</code>.
+        {isApiRateLimitedMode(mode) ? (
+          <>
+            {" "}
+            Public/paid API mode allows only one tracer at a time — stop the
+            present track before starting a new one.
+          </>
+        ) : (
+          <> Node/ord modes can run multiple tracks without this limit.</>
+        )}
       </p>
     </section>
   );
