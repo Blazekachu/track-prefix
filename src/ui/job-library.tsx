@@ -5,10 +5,24 @@ import type { DataMode } from "@/core/job-config";
 import {
   shouldBlockNewTrack,
   isApiRateLimitedMode,
-  type JobSummary,
-} from "@/core/job-library";
+  NEW_TRACK_BLOCKED_MSG,
+} from "@/core/job-policy";
 
-export type { JobSummary };
+export type JobSummary = {
+  id: string;
+  prefix: string;
+  seriesId: number;
+  satCount: string;
+  nameLength: number;
+  createdAt: string;
+  lastOpenedAt: string;
+  traceStatus: string | null;
+  lastRun: string | null;
+  queueSize: number;
+  isRunning: boolean;
+  isActive: boolean;
+  dbPath: string;
+};
 
 const STATUS_LABELS: Record<string, string> = {
   idle: "idle",
@@ -18,8 +32,6 @@ const STATUS_LABELS: Record<string, string> = {
   complete: "complete",
   error: "error",
 };
-
-const NEW_TRACK_BLOCKED_MSG = "Stop present Track to proceed with new";
 
 export function JobLibrary({
   onNewTrack,

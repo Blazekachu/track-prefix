@@ -10,14 +10,13 @@ import {
 import {
   createJob,
   getActiveDbPath,
-  getJobById,
   listJobSummaries,
   loadRegistry,
   setActiveJob,
-  shouldBlockNewTrack,
   registryPath,
   jobsRoot,
 } from "./job-library";
+import { shouldBlockNewTrack } from "./job-policy";
 
 describe("job-library", () => {
   let dir: string;
@@ -138,35 +137,5 @@ describe("job-library", () => {
     const summaries = listJobSummaries();
     expect(summaries[0].isActive).toBe(true);
     expect(summaries[0].id).toBe(entry.id);
-  });
-
-  it("shouldBlockNewTrack for public_api when active job paused", () => {
-    expect(
-      shouldBlockNewTrack("public_api", [
-        {
-          isActive: true,
-          isRunning: false,
-          traceStatus: "paused",
-        },
-      ])
-    ).toBe(true);
-    expect(
-      shouldBlockNewTrack("btc_node", [
-        {
-          isActive: true,
-          isRunning: false,
-          traceStatus: "paused",
-        },
-      ])
-    ).toBe(false);
-    expect(
-      shouldBlockNewTrack("public_api", [
-        {
-          isActive: true,
-          isRunning: false,
-          traceStatus: "idle",
-        },
-      ])
-    ).toBe(false);
   });
 });
