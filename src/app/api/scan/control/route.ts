@@ -51,6 +51,7 @@ export async function POST(req: Request) {
         sats_checked: state?.sats_checked ?? 0,
         inscriptions_found: state?.inscriptions_found ?? 0,
         last_outpoint: state?.last_outpoint ?? null,
+        scan_mode: state?.scan_mode ?? "first_sat",
       });
     } finally {
       db.close();

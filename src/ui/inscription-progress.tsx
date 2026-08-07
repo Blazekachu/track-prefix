@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 type ScanData = {
   mode: string;
   canInscriptionScan: boolean;
+  canEverySat: boolean;
   positionComplete: boolean;
   conservation: {
     target: number;
@@ -19,6 +20,8 @@ type ScanData = {
   inscriptionsFound: number;
   lastRun: string | null;
   canScan: boolean;
+  scanMode: string;
+  satsPerUtxo: string;
   blockReason: string | null;
 };
 
@@ -63,7 +66,7 @@ export function InscriptionProgress() {
     };
   }, [load]);
 
-  async function startScan() {
+  async function startScan(mode: "first_sat" | "every_sat") {
     setBusy(true);
     setMsg(null);
     try {
@@ -72,7 +75,11 @@ export function InscriptionProgress() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "resume" }),
       });
-      const res = await fetch("/api/scan/run", { method: "POST" });
+      const res = await fetch("/api/scan/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to start scan");
       setMsg(json.message);
@@ -135,6 +142,7 @@ export function InscriptionProgress() {
 
   const statusLabel = STATUS_LABELS[data.status] ?? data.status.toUpperCase();
   const statusColor = STATUS_COLORS[data.status] ?? "text-terminal-dim";
+  const lastWasEvery = data.scanMode === "every_sat";
 
   return (
     <section className="border border-terminal-amber/30 rounded p-4 bg-terminal-surface">
@@ -149,20 +157,39 @@ export function InscriptionProgress() {
             <span className="text-terminal-amber animate-pulse">●</span>
           )}
           {canStart && (
-            <button
-              type="button"
-              onClick={() => void startScan()}
-              disabled={busy}
-              className="px-3 py-1 border border-terminal-amber text-terminal-amber hover:bg-terminal-amber/10"
-            >
-              {busy
-                ? "…"
-                : data.status === "paused"
-                  ? "Resume"
-                  : data.status === "complete"
-                    ? "Re-scan"
-                    : "Start scan"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  void startScan(
+                    data.status === "paused" && lastWasEvery
+                      ? "every_sat"
+                      : "first_sat"
+                  )
+                }
+                disabled={busy}
+                className="px-3 py-1 border border-terminal-amber text-terminal-amber hover:bg-terminal-amber/10"
+              >
+                {busy
+                  ? "…"
+                  : data.status === "paused"
+                    ? "Resume"
+                    : data.status === "complete"
+                      ? "Re-scan (1st sat)"
+                      : "Start scan (1st sat)"}
+              </button>
+              {data.canEverySat && data.status !== "paused" && (
+                <button
+                  type="button"
+                  onClick={() => void startScan("every_sat")}
+                  disabled={busy}
+                  className="px-3 py-1 border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                  title="Check every sat in each live UTXO via local ord"
+                >
+                  {busy ? "…" : "Scan every sat"}
+                </button>
+              )}
+            </>
           )}
           {running && (
             <>
@@ -214,11 +241,35 @@ export function InscriptionProgress() {
           <p className="text-terminal-amber">{data.blockReason}</p>
         )}
         {!data.blockReason && data.canInscriptionScan && (
-          <p>
-            Samples sats inside each live UTXO via{" "}
-            {data.mode === "btc_ord" ? "local ord" : "public sat API"} after
-            position track is complete.
-          </p>
+          <>
+            <p>
+              Default scan: <strong className="text-terminal-bright">1 sat per UTXO</strong>{" "}
+              — the <strong className="text-terminal-bright">first sat of each outpoint</strong>{" "}
+              (common inscription postage seat). Inscriptions found = hits on those lookups.
+            </p>
+            {data.mode === "btc_ord" ? (
+              <p>
+                Ord users: <strong className="text-terminal-green">Scan every sat</strong>{" "}
+                checks every sat in each live UTXO&apos;s tracked range via local ord
+                (slower; catches inscriptions at any offset).
+              </p>
+            ) : (
+              <p>
+                Public/paid API: first-sat only (keeps rate limits sane). Switch to{" "}
+                <strong>BTC node + ord</strong> for every-sat scans.
+              </p>
+            )}
+            {data.lastRun && (
+              <p>
+                Last run mode:{" "}
+                <span className="text-terminal-bright">
+                  {data.scanMode === "every_sat" ? "every sat" : "1st sat / UTXO"}
+                </span>
+                {" — "}
+                {data.satsPerUtxo}
+              </p>
+            )}
+          </>
         )}
       </div>
 
@@ -236,13 +287,23 @@ export function InscriptionProgress() {
           </div>
         </div>
         <div>
-          <span className="text-terminal-dim">Sats checked</span>
+          <span className="text-terminal-dim">
+            {data.scanMode === "every_sat"
+              ? "Sats checked"
+              : "1st-sat checks"}
+          </span>
           <div className="text-terminal-bright font-bold">
             {data.satsChecked.toLocaleString("en-US")}
+            {data.scanMode !== "every_sat" && data.utxosDone > 0 && (
+              <span className="text-terminal-dim text-xs font-normal">
+                {" "}
+                (= {data.utxosDone} UTXOs × 1)
+              </span>
+            )}
           </div>
         </div>
         <div>
-          <span className="text-terminal-dim">Inscriptions</span>
+          <span className="text-terminal-dim">Inscriptions found</span>
           <div className="text-terminal-amber font-bold">
             {data.inscriptionsFound.toLocaleString("en-US")}
           </div>

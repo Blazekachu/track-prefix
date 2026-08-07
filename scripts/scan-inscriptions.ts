@@ -17,6 +17,7 @@ import {
   InscriptionScanner,
   ScanPausedError,
   ScanStoppedError,
+  type InscriptionScanMode,
 } from "../src/indexer/scanner";
 import {
   getScanState,
@@ -27,6 +28,12 @@ import {
 import { isPidAlive } from "../src/core/pid";
 
 async function main() {
+  const scanModeArg = (process.argv[2] ||
+    process.env.SCAN_MODE ||
+    "first_sat") as InscriptionScanMode;
+  const scanMode: InscriptionScanMode =
+    scanModeArg === "every_sat" ? "every_sat" : "first_sat";
+
   const cfg = loadConfig();
   if (!cfg?.job) {
     console.error("[scanner] No active job in config.json");
@@ -40,6 +47,13 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+  if (scanMode === "every_sat" && cfg.mode !== "btc_ord") {
+    console.error(
+      "[scanner] every_sat is only allowed for btc_ord (local ord node)."
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   const dbPath = process.env.DATABASE_PATH || getActiveDbPath();
   process.env.DATABASE_PATH = dbPath;
@@ -47,7 +61,7 @@ async function main() {
 
   console.log(`[scanner] track-prefix inscription scan`);
   console.log(`[scanner] DB: ${dbPath}`);
-  console.log(`[scanner] Mode: ${cfg.mode}`);
+  console.log(`[scanner] Data mode: ${cfg.mode} | scan: ${scanMode}`);
 
   clearScanControl();
 
@@ -115,7 +129,7 @@ async function main() {
     console.log(`[scanner] Provider: ${label}`);
 
     const scanner = new InscriptionScanner(db, provider);
-    await scanner.scanSeries(cfg.job.seriesId);
+    await scanner.scanSeries(cfg.job.seriesId, scanMode);
     console.log("[scanner] Done.");
   } catch (err) {
     if (err instanceof ScanPausedError || err instanceof ScanStoppedError) {
@@ -132,6 +146,7 @@ async function main() {
           sats_checked: state?.sats_checked ?? 0,
           inscriptions_found: state?.inscriptions_found ?? 0,
           last_outpoint: state?.last_outpoint ?? null,
+          scan_mode: state?.scan_mode ?? scanMode,
         });
       } catch {
         /* ignore */

@@ -13,7 +13,18 @@ import { isPidAlive } from "@/core/pid";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+type Body = { mode?: "first_sat" | "every_sat" };
+
+export async function POST(req: Request) {
+  let body: Body = {};
+  try {
+    body = (await req.json()) as Body;
+  } catch {
+    /* default first_sat */
+  }
+
+  const scanMode = body.mode === "every_sat" ? "every_sat" : "first_sat";
+
   const cfg = loadConfig();
   if (!cfg?.job) {
     return NextResponse.json({ error: "No active job." }, { status: 400 });
@@ -23,6 +34,15 @@ export async function POST() {
       {
         error:
           "Inscription scan requires btc_ord (or public/paid API). BTC node alone has no inscription index.",
+      },
+      { status: 403 }
+    );
+  }
+  if (scanMode === "every_sat" && cfg.mode !== "btc_ord") {
+    return NextResponse.json(
+      {
+        error:
+          "Scan every sat is only available for BTC node + ord (local ord).",
       },
       { status: 403 }
     );
@@ -67,7 +87,7 @@ export async function POST() {
 
   const child = spawn(
     "npx",
-    ["tsx", "scripts/scan-inscriptions.ts"],
+    ["tsx", "scripts/scan-inscriptions.ts", scanMode],
     {
       cwd: process.cwd(),
       detached: true,
@@ -76,6 +96,7 @@ export async function POST() {
       env: {
         ...process.env,
         DATABASE_PATH: dbPath,
+        SCAN_MODE: scanMode,
       },
     }
   );
@@ -83,7 +104,11 @@ export async function POST() {
 
   return NextResponse.json({
     ok: true,
-    message: `Inscription scan started for ${cfg.job.prefix} series ${cfg.job.seriesId}`,
+    message:
+      scanMode === "every_sat"
+        ? `Every-sat inscription scan started for ${cfg.job.prefix} series ${cfg.job.seriesId}`
+        : `First-sat inscription scan started for ${cfg.job.prefix} series ${cfg.job.seriesId} (1 sat per UTXO)`,
+    mode: scanMode,
     pid: child.pid ?? null,
   });
 }

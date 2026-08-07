@@ -76,7 +76,8 @@ export function initSchema(db: Database.Database): void {
       sats_checked INTEGER NOT NULL DEFAULT 0,
       inscriptions_found INTEGER NOT NULL DEFAULT 0,
       last_outpoint TEXT,
-      last_run TEXT NOT NULL DEFAULT (datetime('now'))
+      last_run TEXT NOT NULL DEFAULT (datetime('now')),
+      scan_mode TEXT NOT NULL DEFAULT 'first_sat'
     );
 
     -- Migration: add last_moved if missing
@@ -87,6 +88,14 @@ export function initSchema(db: Database.Database): void {
   db.prepare(
     `INSERT OR IGNORE INTO scan_state (id, status) VALUES (1, 'idle')`
   ).run();
+
+  // Migration: scan_mode column
+  const scanCols = db.pragma("table_info(scan_state)") as Array<{ name: string }>;
+  if (!scanCols.find((c) => c.name === "scan_mode")) {
+    db.exec(
+      `ALTER TABLE scan_state ADD COLUMN scan_mode TEXT NOT NULL DEFAULT 'first_sat'`
+    );
+  }
 
   // Add last_moved column if it doesn't exist
   const cols = db.pragma('table_info(utxos)') as Array<{ name: string }>;

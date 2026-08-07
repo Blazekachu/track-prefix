@@ -501,6 +501,7 @@ export interface ScanStateRow {
   inscriptions_found: number;
   last_outpoint: string | null;
   last_run: string;
+  scan_mode: string;
 }
 
 export interface ScanStateInput {
@@ -510,6 +511,7 @@ export interface ScanStateInput {
   sats_checked: number;
   inscriptions_found: number;
   last_outpoint: string | null;
+  scan_mode?: string;
 }
 
 export function getScanState(db: Database.Database): ScanStateRow | null {
@@ -521,12 +523,13 @@ export function getScanState(db: Database.Database): ScanStateRow | null {
 }
 
 export function updateScanState(db: Database.Database, state: ScanStateInput): void {
+  const scanMode = state.scan_mode ?? "first_sat";
   db.prepare(`
     INSERT INTO scan_state (
       id, status, utxos_total, utxos_done, sats_checked,
-      inscriptions_found, last_outpoint, last_run
+      inscriptions_found, last_outpoint, last_run, scan_mode
     )
-    VALUES (1, ?, ?, ?, ?, ?, ?, datetime('now'))
+    VALUES (1, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     ON CONFLICT(id) DO UPDATE SET
       status = excluded.status,
       utxos_total = excluded.utxos_total,
@@ -534,14 +537,16 @@ export function updateScanState(db: Database.Database, state: ScanStateInput): v
       sats_checked = excluded.sats_checked,
       inscriptions_found = excluded.inscriptions_found,
       last_outpoint = excluded.last_outpoint,
-      last_run = datetime('now')
+      last_run = datetime('now'),
+      scan_mode = excluded.scan_mode
   `).run(
     state.status,
     state.utxos_total,
     state.utxos_done,
     state.sats_checked,
     state.inscriptions_found,
-    state.last_outpoint
+    state.last_outpoint,
+    scanMode
   );
 }
 

@@ -59,6 +59,12 @@ export async function GET() {
       lastOutpoint: scan?.last_outpoint ?? null,
       lastRun: scan?.last_run ?? null,
       canScan,
+      canEverySat: mode === "btc_ord" && canScan,
+      scanMode: scan?.scan_mode ?? "first_sat",
+      satsPerUtxo:
+        (scan?.scan_mode ?? "first_sat") === "every_sat"
+          ? "every sat in each UTXO tracked range (+ outpoint first sat)"
+          : "1 sat per UTXO (first sat of the outpoint)",
       blockReason: !modeCanInscriptionScan(mode)
         ? "Current mode has no inscription index. Use BTC node + ord (or public/paid API)."
         : !positionComplete
