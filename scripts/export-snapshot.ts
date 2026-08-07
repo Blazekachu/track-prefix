@@ -1,7 +1,7 @@
 /**
  * Export tracker DB state to a static JSON snapshot.
- * Run: npx tsx scripts/export-snapshot.ts
- * Output: ../wtf/projects/bhang.wtf/public/tracker-data.json
+ * Run: npm run snapshot
+ * Output: ./tracker-data.json (override with SNAPSHOT_OUT)
  */
 import { getDb } from "../src/db/index";
 import { getSeries, getUtxoStats, getTraceState, getQueueSize, getUtxosBySeries, getInscriptionsBySeries, getTraceAccounting } from "../src/db/queries";
@@ -14,14 +14,7 @@ const db = getDb();
 
 // ─── Rare Sat Definitions ───
 // Special sats within BHANG ranges that have ordinals rarity properties
-const SPECIAL_SATS: Array<{ sat: bigint; type: string; label: string; symbol: string; color: string; name: string; desc: string }> = [
-  { sat: 1773906250000000n, type: "uncommon", label: "Uncommon", symbol: "◆", color: "#70a0ff", name: "bhanggsozvd", desc: "First sat of block 579,125" },
-  { sat: 1773906116093771n, type: "palindrome", label: "Palindrome", symbol: "⟐", color: "#ff70d0", name: "bhangrzprys", desc: "Sat number reads same forwards/backwards" },
-  { sat: 1773906226093771n, type: "palindrome", label: "Palindrome", symbol: "⟐", color: "#ff70d0", name: "bhangisxebm", desc: "Sat number reads same forwards/backwards" },
-  // Future series (will activate when mined)
-  { sat: 2087457929687500n, type: "uncommon", label: "Uncommon", symbol: "◆", color: "#70a0ff", name: "bhangilegj", desc: "First sat of block 1,568,923" },
-  { sat: 2099981444339814n, type: "uncommon", label: "Uncommon", symbol: "◆", color: "#70a0ff", name: "bhangbgt", desc: "First sat of block 3,536,798" },
-];
+const SPECIAL_SATS: Array<{ sat: bigint; type: string; label: string; symbol: string; color: string; name: string; desc: string }> = [];
 
 function getUtxoRarity(sat_range_start: string, sat_range_end: string) {
   const start = BigInt(sat_range_start);
@@ -77,16 +70,16 @@ async function fetchAddressBalance(address: string): Promise<number | null> {
 async function computeMultiRangeWallets(
   utxos: Array<{ address: string; outpoint: string; sat_count: number; wallet_label?: { label: string; kind: string } }>
 ): Promise<Array<{ address: string; range_count: number; outpoint_count: number; bhang_sats: number; btc_balance_sats: number | null; wallet_label?: { label: string; kind: string } }>> {
-  type Agg = { ranges: number; outpoints: Set<string>; bhang_sats: number; label?: { label: string; kind: string } };
+  type Agg = { ranges: number; outpoints: Set<string>; tracked_sats: number; label?: { label: string; kind: string } };
   const byAddr: Record<string, Agg> = {};
   for (const u of utxos) {
-    if (!byAddr[u.address]) byAddr[u.address] = { ranges: 0, outpoints: new Set(), bhang_sats: 0, label: u.wallet_label };
+    if (!byAddr[u.address]) byAddr[u.address] = { ranges: 0, outpoints: new Set(), tracked_sats: 0, label: u.wallet_label };
     byAddr[u.address].ranges++;
     byAddr[u.address].outpoints.add(u.outpoint);
-    byAddr[u.address].bhang_sats += Number(u.sat_count);
+    byAddr[u.address].tracked_sats += Number(u.sat_count);
   }
   const multi = Object.entries(byAddr).filter(([, w]) => w.ranges >= 2);
-  multi.sort((a, b) => b[1].bhang_sats - a[1].bhang_sats);
+  multi.sort((a, b) => b[1].tracked_sats - a[1].tracked_sats);
 
   // Fetch balances serially through the shared client's global rate limiter.
   // No parallel bursts (those are what trip provider rate-limits); a stalled
@@ -104,7 +97,7 @@ async function computeMultiRangeWallets(
     address: addr,
     range_count: w.ranges,
     outpoint_count: w.outpoints.size,
-    bhang_sats: w.bhang_sats,
+    tracked_sats: w.tracked_sats,
     btc_balance_sats: balances.get(addr) ?? null,
     ...(w.label && { wallet_label: w.label }),
   }));
@@ -148,8 +141,9 @@ for (const s of series) {
   });
 }
 
-// Sat conservation — every BHANG sat must sit in a live UTXO or the trace queue.
-const acc = getTraceAccounting(db, 1);
+// Sat conservation — every tracked sat must sit in a live UTXO or the trace queue.
+const primarySeriesId = series[0]?.id ?? 1;
+const acc = getTraceAccounting(db, primarySeriesId);
 const conservation = {
   target: Number(acc.target_sats),
   live_sats: Number(acc.live_sats),
@@ -173,7 +167,9 @@ const snapshot = {
   series: seriesData,
 };
 
-const outPath = resolve(__dirname, "../../bhang.wtf/tracker-data.json");
+const outPath = process.env.SNAPSHOT_OUT
+  ? resolve(process.env.SNAPSHOT_OUT)
+  : resolve(process.cwd(), "tracker-data.json");
 writeFileSync(outPath, JSON.stringify(snapshot, null, 2));
 console.log(`Snapshot exported to ${outPath}`);
 console.log(`Series: ${series.length}, UTXOs: ${seriesData.reduce((a, s) => a + s.utxos.length, 0)}, Inscriptions: ${seriesData.reduce((a, s) => a + s.inscriptions.length, 0)}, Block: ${blockHeight}`);

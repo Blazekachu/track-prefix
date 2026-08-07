@@ -7,7 +7,7 @@ const FETCH_TIMEOUT = 15000; // 15s per request (ordinals.com)
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 const DEFAULT_HEADERS: Record<string, string> = {
-  "User-Agent": "bhang-tracker/0.1",
+  "User-Agent": "track-prefix/0.1",
 };
 
 async function fetchWithTimeout(url: string, opts?: RequestInit): Promise<Response> {

@@ -5,6 +5,7 @@ import { InscriptionScanner } from "../src/indexer/scanner";
 import { loadConfig } from "../src/core/job-config";
 import { SERIES } from "../src/core/series";
 import { originBlockHeights } from "../src/core/origin-blocks";
+import { resolveEsploraBases } from "../src/providers/mode";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -104,8 +105,25 @@ async function main() {
 
   const db = getDb(dbPath);
   try {
-    const provider = new PublicOrdProvider(delayMs);
     const cfg = loadConfig();
+    if (cfg) {
+      try {
+        const bases = resolveEsploraBases({
+          mode: cfg.mode,
+          modeCredentials: cfg.modeCredentials,
+        });
+        process.env.ESPLORA_BASE_URLS = bases.join(",");
+        if (cfg.mode === "paid_api" && cfg.modeCredentials.apiKey) {
+          process.env.ESPLORA_API_KEY = cfg.modeCredentials.apiKey;
+        }
+      } catch (e) {
+        console.error(`[indexer] ${e instanceof Error ? e.message : String(e)}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    const provider = new PublicOrdProvider(delayMs);
     let satStart: bigint;
     let satEnd: bigint;
     let seriesId = 1;

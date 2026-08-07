@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BHANG TRACKER",
-  description: "Track bhang-prefix satoshis across 7 series on Bitcoin",
+  title: "track-prefix",
+  description: "Local FIFO tracer for mined sat-name prefix series",
 };
 
 export default function RootLayout({

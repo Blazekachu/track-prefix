@@ -17,7 +17,7 @@ const STATUS_SYMBOLS: Record<string, string> = {
   error: "[!] ERROR",
 };
 
-console.log("=== BHANG TRACKER STATUS ===\n");
+console.log("=== TRACK-PREFIX STATUS ===\n");
 
 if (!state) {
   console.log("Indexer: Never run");

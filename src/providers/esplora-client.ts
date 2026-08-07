@@ -52,7 +52,7 @@ const RATELIMIT_MAX_MS = 4 * 60 * 60_000; // cap rate-limit cooldown at 4 h
 const RETRY_AFTER_MAX_MS = 6 * 60 * 60_000; // cap an honored Retry-After at 6 h
 const TRANSIENT_BASE_MS = 2 * 60_000; // first network/timeout failure → 2 min
 const TRANSIENT_MAX_MS = 30 * 60_000; // cap transient cooldown at 30 min
-const DEFAULT_HEADERS: Record<string, string> = { "User-Agent": "bhang-tracker/0.1" };
+const DEFAULT_HEADERS: Record<string, string> = { "User-Agent": "track-prefix/0.1" };
 
 function defaultDelayMs(): number {
   return parseInt(process.env.API_DELAY_MS || "350", 10);
@@ -70,7 +70,7 @@ type HealthStore = Record<string, ProviderHealth>;
 
 function healthPath(): string {
   if (process.env.PROVIDER_HEALTH_PATH) return process.env.PROVIDER_HEALTH_PATH;
-  const dbPath = path.resolve(process.env.DATABASE_PATH || "./bhang-tracker.db");
+  const dbPath = path.resolve(process.env.DATABASE_PATH || "./track-prefix.db");
   return path.join(path.dirname(dbPath), "provider-health.json");
 }
 
