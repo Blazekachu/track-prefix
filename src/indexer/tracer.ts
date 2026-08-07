@@ -16,9 +16,23 @@ import {
   getTraceGaps,
   deleteQueuedRangesCoveredByLiveUtxos,
 } from "@/db/queries";
+import { readControl, clearControl } from "@/core/trace-control";
 
 export type TracerMode = "trace" | "refresh" | "repair";
 
+export class TracePausedError extends Error {
+  constructor(message = "Trace paused by user") {
+    super(message);
+    this.name = "TracePausedError";
+  }
+}
+
+export class TraceStoppedError extends Error {
+  constructor(message = "Trace stopped by user") {
+    super(message);
+    this.name = "TraceStoppedError";
+  }
+}
 export class CoinbaseTracer {
   private db: Database.Database;
   private provider: OrdProvider;
@@ -322,6 +336,21 @@ export class CoinbaseTracer {
     let processed = 0;
 
     while (true) {
+      const control = readControl();
+      if (control === "pause" || control === "stop") {
+        updateTraceState(this.db, {
+          last_traced_txid: null,
+          last_traced_depth: 0,
+          total_utxos_found: this.utxosFound,
+          fee_sats_retraced: this.feeSatsRetraced.toString(),
+          status: "paused",
+        });
+        clearControl();
+        console.log(`[tracer] ${control === "stop" ? "Stopped" : "Paused"} by user — queue preserved for resume.`);
+        if (control === "stop") throw new TraceStoppedError();
+        throw new TracePausedError();
+      }
+
       this.cleanupCoveredQueueRows();
       const item = peekTrace(this.db);
       if (!item) break;

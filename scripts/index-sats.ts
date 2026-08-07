@@ -1,11 +1,18 @@
 import { getDb } from "../src/db/index";
 import { PublicOrdProvider } from "../src/providers/public-provider";
-import { CoinbaseTracer, type TracerMode } from "../src/indexer/tracer";
+import {
+  CoinbaseTracer,
+  TracePausedError,
+  TraceStoppedError,
+  type TracerMode,
+} from "../src/indexer/tracer";
 import { InscriptionScanner } from "../src/indexer/scanner";
 import { loadConfig } from "../src/core/job-config";
 import { SERIES } from "../src/core/series";
 import { originBlockHeights } from "../src/core/origin-blocks";
 import { resolveEsploraBases } from "../src/providers/mode";
+import { clearControl, writeControl } from "../src/core/trace-control";
+import { getTraceState, updateTraceState } from "../src/db/queries";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -22,21 +29,20 @@ if (!validModes.includes(mode)) {
   console.log("  --no-scan  — Skip inscription scanning after tracing");
   process.exitCode = 1;
 } else {
-  main();
+  void main();
 }
 
 async function main() {
   const delayMs = parseInt(process.env.API_DELAY_MS || "350", 10);
   const dbPath = process.env.DATABASE_PATH || "./track-prefix.db";
-  const lockPath = `${path.resolve(dbPath)}.trace.lock`;
+  const lockFile = `${path.resolve(dbPath)}.trace.lock`;
 
   console.log(`[indexer] track-prefix sat indexer — mode: ${mode}`);
   console.log(`[indexer] DB: ${dbPath} | API delay: ${delayMs}ms`);
-  console.log("");
+  console.log("[indexer] Pause/stop from the dashboard, or Ctrl+C here.\n");
 
-  // Probe whether a PID corresponds to a live process. process.kill(pid, 0)
-  // is a no-op signal probe: succeeds if the process exists, throws if it
-  // does not. EPERM (exists but no signal permission) still counts as alive.
+  clearControl();
+
   const isPidAlive = (pid: number): boolean => {
     if (!pid || pid <= 0) return false;
     try {
@@ -49,61 +55,84 @@ async function main() {
     }
   };
 
-  // A refresh that has held the lock longer than this is almost certainly
-  // dead (refreshes finish in minutes). Both the dead-PID AND the age check
-  // must pass before reclaim, so we never interrupt a slow-but-legit run
-  // and never trust a PID that may have been reused by an unrelated process.
   const STALE_LOCK_AGE_MS = 30 * 60 * 1000;
 
   const writeLockMetadata = (fd: number): void => {
-    fs.writeFileSync(fd, JSON.stringify({
-      pid: process.pid,
-      mode,
-      started_at: new Date().toISOString(),
-    }, null, 2));
+    fs.writeFileSync(
+      fd,
+      JSON.stringify(
+        {
+          pid: process.pid,
+          mode,
+          started_at: new Date().toISOString(),
+        },
+        null,
+        2
+      )
+    );
   };
 
   let lockFd: number | null = null;
   try {
-    lockFd = fs.openSync(lockPath, "wx");
+    lockFd = fs.openSync(lockFile, "wx");
     writeLockMetadata(lockFd);
   } catch {
-    // Lock exists. Reclaim only when BOTH gates pass: the recorded PID is
-    // dead AND the lock is older than STALE_LOCK_AGE_MS.
     let priorContent = "";
     let reclaim = false;
     try {
-      priorContent = fs.readFileSync(lockPath, "utf8");
-      const prior = JSON.parse(priorContent) as { pid?: number; started_at?: string; mode?: string };
+      priorContent = fs.readFileSync(lockFile, "utf8");
+      const prior = JSON.parse(priorContent) as {
+        pid?: number;
+        started_at?: string;
+        mode?: string;
+      };
       const priorPid = Number(prior.pid ?? 0);
-      const priorAgeMs = prior.started_at ? Date.now() - new Date(prior.started_at).getTime() : 0;
+      const priorAgeMs = prior.started_at
+        ? Date.now() - new Date(prior.started_at).getTime()
+        : 0;
       if (!isPidAlive(priorPid) && priorAgeMs > STALE_LOCK_AGE_MS) {
-        console.warn(`[indexer] Reclaiming stale lock — pid ${priorPid} is dead, lock is ${Math.round(priorAgeMs / 60000)} min old (mode=${prior.mode ?? "unknown"}).`);
-        fs.unlinkSync(lockPath);
+        console.warn(
+          `[indexer] Reclaiming stale lock — pid ${priorPid} is dead, lock is ${Math.round(priorAgeMs / 60000)} min old (mode=${prior.mode ?? "unknown"}).`
+        );
+        fs.unlinkSync(lockFile);
         reclaim = true;
       }
     } catch {
-      // Unparseable or unreadable lock — treat as opaque, do NOT reclaim.
+      // Unparseable lock — do not reclaim
     }
     if (reclaim) {
       try {
-        lockFd = fs.openSync(lockPath, "wx");
+        lockFd = fs.openSync(lockFile, "wx");
         writeLockMetadata(lockFd);
       } catch {
-        console.error("[indexer] Lock reclaim raced with another process; aborting safely.");
+        console.error(
+          "[indexer] Lock reclaim raced with another process; aborting safely."
+        );
         process.exitCode = 1;
         return;
       }
     } else {
-      console.error(`[indexer] Another tracer appears to be running. Lock: ${lockPath}`);
+      console.error(
+        `[indexer] Another tracer appears to be running. Lock: ${lockFile}`
+      );
       console.error(priorContent || "(lock file unreadable)");
-      console.error("[indexer] Stop the other tracer first. If it is definitely dead, delete the lock file and rerun.");
+      console.error(
+        "[indexer] Use Pause/Stop in the dashboard, or delete the lock if the process is dead."
+      );
       process.exitCode = 1;
       return;
     }
   }
 
   const db = getDb(dbPath);
+
+  const onSignal = () => {
+    console.log("\n[indexer] Signal received — requesting pause…");
+    writeControl("pause");
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+
   try {
     const cfg = loadConfig();
     if (cfg) {
@@ -136,7 +165,9 @@ async function main() {
       satStart = series1.satStart;
       satEnd = series1.satEnd;
       seriesId = series1.id;
-      console.warn("[indexer] No config.json job — falling back to SERIES[0] (legacy BHANG S1).");
+      console.warn(
+        "[indexer] No config.json job — falling back to SERIES[0] (legacy BHANG S1)."
+      );
     }
 
     const tracer = new CoinbaseTracer(
@@ -159,15 +190,42 @@ async function main() {
 
     console.log("\n[indexer] Done.");
   } catch (err) {
-    console.error(`\n[indexer] Stopped safely: ${err instanceof Error ? err.message : String(err)}`);
-    console.error("[indexer] No queue item is deleted until it is fully traced. Fix the issue and rerun the same command to resume.");
-    process.exitCode = 1;
+    if (err instanceof TracePausedError || err instanceof TraceStoppedError) {
+      console.log(`[indexer] ${err.message}`);
+      console.log(
+        "[indexer] Queue preserved. Resume with Start tracer / npm run trace:sats"
+      );
+      process.exitCode = 0;
+    } else {
+      const state = getTraceState(db);
+      try {
+        updateTraceState(db, {
+          last_traced_txid: state?.last_traced_txid ?? null,
+          last_traced_depth: state?.last_traced_depth ?? 0,
+          total_utxos_found: state?.total_utxos_found ?? 0,
+          fee_sats_retraced: state?.fee_sats_retraced ?? "0",
+          status: "error",
+        });
+      } catch {
+        /* ignore */
+      }
+      console.error(
+        `\n[indexer] Stopped safely: ${err instanceof Error ? err.message : String(err)}`
+      );
+      console.error(
+        "[indexer] No queue item is deleted until it is fully traced. Fix the issue and rerun the same command to resume."
+      );
+      process.exitCode = 1;
+    }
   } finally {
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+    clearControl();
     db.close();
     if (lockFd !== null) {
       fs.closeSync(lockFd);
       try {
-        fs.unlinkSync(lockPath);
+        fs.unlinkSync(lockFile);
       } catch {
         // best effort
       }

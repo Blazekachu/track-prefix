@@ -42,8 +42,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function TraceProgress() {
   const [data, setData] = useState<TraceData | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [startMsg, setStartMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -61,18 +61,43 @@ export function TraceProgress() {
   }, []);
 
   async function startTrace() {
-    setStarting(true);
-    setStartMsg(null);
+    setBusy(true);
+    setMsg(null);
     try {
+      await fetch("/api/trace/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resume" }),
+      });
       const res = await fetch("/api/trace/run", { method: "POST" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to start tracer");
-      setStartMsg(json.message);
+      setMsg(json.message);
       await load();
     } catch (e) {
-      setStartMsg(e instanceof Error ? e.message : String(e));
+      setMsg(e instanceof Error ? e.message : String(e));
     } finally {
-      setStarting(false);
+      setBusy(false);
+    }
+  }
+
+  async function control(action: "pause" | "stop") {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/trace/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `Failed to ${action}`);
+      setMsg(json.message);
+      await load();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -102,11 +127,14 @@ export function TraceProgress() {
   const statusLabel = STATUS_LABELS[data.status] ?? data.status.toUpperCase();
   const statusColor = STATUS_COLORS[data.status] ?? "text-terminal-dim";
   const job = data.job;
+  const running =
+    data.status === "tracing" || data.status === "refreshing";
   const canStart =
-    data.status === "idle" ||
-    data.status === "paused" ||
-    data.status === "error" ||
-    (!data.lastRun && data.status !== "tracing");
+    !running &&
+    (data.status === "idle" ||
+      data.status === "paused" ||
+      data.status === "error" ||
+      !data.lastRun);
 
   return (
     <section className="border border-terminal-green/20 rounded p-4 bg-terminal-surface">
@@ -116,28 +144,46 @@ export function TraceProgress() {
             ? `${job.prefix.toUpperCase()} · SERIES ${job.seriesId} — TRACE PROGRESS`
             : "TRACE PROGRESS"}
         </h2>
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-2 text-xs flex-wrap">
           <span className="text-terminal-dim">STATUS:</span>
           <span className={`font-bold ${statusColor}`}>{statusLabel}</span>
-          {data.status === "tracing" && (
+          {running && (
             <span className="text-terminal-green animate-pulse">●</span>
           )}
           {canStart && (
             <button
               type="button"
               onClick={() => void startTrace()}
-              disabled={starting}
+              disabled={busy}
               className="px-3 py-1 border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
             >
-              {starting ? "Starting…" : "Start tracer"}
+              {busy ? "…" : data.status === "paused" ? "Resume" : "Start tracer"}
             </button>
+          )}
+          {running && (
+            <>
+              <button
+                type="button"
+                onClick={() => void control("pause")}
+                disabled={busy}
+                className="px-3 py-1 border border-terminal-amber text-terminal-amber hover:bg-terminal-amber/10"
+              >
+                Pause
+              </button>
+              <button
+                type="button"
+                onClick={() => void control("stop")}
+                disabled={busy}
+                className="px-3 py-1 border border-terminal-red text-terminal-red hover:bg-terminal-red/10"
+              >
+                Stop
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {startMsg && (
-        <p className="text-xs text-terminal-dim mb-3">{startMsg}</p>
-      )}
+      {msg && <p className="text-xs text-terminal-dim mb-3">{msg}</p>}
 
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -198,15 +244,18 @@ export function TraceProgress() {
         </div>
         {job && (
           <div className="text-terminal-dim text-xs mt-2">
-            Range: {Number(job.satStart).toLocaleString("en-US")} →{" "}
-            {Number(job.satEnd).toLocaleString("en-US")} ({job.satCount} sats)
+            Range: {job.satStart} → {job.satEnd} ({job.satCount} sats)
           </div>
         )}
-        {!data.lastRun && (
+        <p className="text-terminal-dim text-xs mt-2">
+          Pause finishes the current queue item then stops. Stop force-ends if
+          needed. Queue is kept either way — Resume/Start continues. Closing the
+          dashboard terminal does <strong>not</strong> stop a detached tracer;
+          use Pause/Stop (or Ctrl+C in the tracer process).
+        </p>
+        {!data.lastRun && !running && (
           <p className="text-terminal-amber text-xs mt-2">
-            Wizard saved your job, but the tracer has not run yet. Click{" "}
-            <strong>Start tracer</strong> (or run{" "}
-            <code>npm run trace:sats</code> in a terminal).
+            Tracer has not run yet. Click <strong>Start tracer</strong>.
           </p>
         )}
       </div>

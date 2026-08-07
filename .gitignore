@@ -47,6 +47,7 @@ track-prefix.db-wal
 track-prefix.db-shm
 track-prefix-backup-*
 track-prefix.db.trace.lock
+*.trace.control
 config.json
 .track-prefix.env
 provider-health.json
