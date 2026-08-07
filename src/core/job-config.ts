@@ -31,6 +31,8 @@ export interface TrackPrefixConfig {
   };
   /** Modes not yet wired show in UI but cannot be selected to start. */
   modeAvailability?: Partial<Record<DataMode, "ready" | "coming_soon">>;
+  /** Active entry in data/registry.json (job library). */
+  activeJobId?: string | null;
   job: TrackJob | null;
 }
 

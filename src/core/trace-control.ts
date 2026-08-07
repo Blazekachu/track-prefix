@@ -1,10 +1,15 @@
 import fs from "fs";
 import path from "path";
+import { getActiveDbPath } from "./job-library";
+import { isPidAlive } from "./pid";
 
 export type TraceControlAction = "run" | "pause" | "stop";
 
 export function dbPathResolved(): string {
-  return path.resolve(process.env.DATABASE_PATH || "./track-prefix.db");
+  if (process.env.DATABASE_PATH) {
+    return path.resolve(process.env.DATABASE_PATH);
+  }
+  return getActiveDbPath();
 }
 
 export function lockPath(): string {
@@ -47,17 +52,6 @@ export function readControl(): TraceControlAction {
     /* ignore */
   }
   return "run";
-}
-
-export function isPidAlive(pid: number): boolean {
-  if (!pid || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e: unknown) {
-    const err = e as NodeJS.ErrnoException;
-    return err.code === "EPERM";
-  }
 }
 
 /** Best-effort stop of the tracer process recorded in the lock file. */

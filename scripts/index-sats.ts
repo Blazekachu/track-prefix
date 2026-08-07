@@ -8,6 +8,7 @@ import {
 } from "../src/indexer/tracer";
 import { InscriptionScanner } from "../src/indexer/scanner";
 import { loadConfig } from "../src/core/job-config";
+import { getActiveDbPath } from "../src/core/job-library";
 import { SERIES } from "../src/core/series";
 import { originBlockHeights } from "../src/core/origin-blocks";
 import { resolveEsploraBases } from "../src/providers/mode";
@@ -34,7 +35,7 @@ if (!validModes.includes(mode)) {
 
 async function main() {
   const delayMs = parseInt(process.env.API_DELAY_MS || "350", 10);
-  const dbPath = process.env.DATABASE_PATH || "./track-prefix.db";
+  const dbPath = process.env.DATABASE_PATH || getActiveDbPath();
   const lockFile = `${path.resolve(dbPath)}.trace.lock`;
 
   console.log(`[indexer] track-prefix sat indexer — mode: ${mode}`);

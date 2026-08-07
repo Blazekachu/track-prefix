@@ -21,8 +21,10 @@ const MODE_LABELS: Record<DataMode, string> = {
 
 export function Wizard({
   modeAvailability,
+  onCancel,
 }: {
   modeAvailability: Record<DataMode, "ready" | "coming_soon">;
+  onCancel?: () => void;
 }) {
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<DataMode>("public_api");
@@ -97,7 +99,7 @@ export function Wizard({
           tipHeightAtStart: tip,
         },
       };
-      const res = await fetch("/api/config", {
+      const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -117,6 +119,15 @@ export function Wizard({
       <h1 className="text-terminal-green text-2xl font-bold tracking-wider">
         track-prefix setup
       </h1>
+      {onCancel && (
+        <button
+          type="button"
+          className="text-xs text-terminal-dim underline"
+          onClick={onCancel}
+        >
+          ← Back to job list
+        </button>
+      )}
 
       {step === 0 && (
         <section className="space-y-4 text-sm leading-relaxed">

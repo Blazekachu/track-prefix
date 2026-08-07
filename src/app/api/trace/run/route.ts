@@ -3,6 +3,12 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { loadConfig } from "@/core/job-config";
+import {
+  assertSingleTraceAllowed,
+  getActiveJobEntry,
+  getActiveDbPath,
+  jobLockPath,
+} from "@/core/job-library";
 
 export const dynamic = "force-dynamic";
 
@@ -10,17 +16,28 @@ export async function POST() {
   const cfg = loadConfig();
   if (!cfg?.job) {
     return NextResponse.json(
-      { error: "No active job. Complete the wizard first." },
+      { error: "No active job. Complete the wizard or select a job first." },
       { status: 400 }
     );
   }
 
-  const dbPath = process.env.DATABASE_PATH || "./track-prefix.db";
-  const lockPath = `${path.resolve(dbPath)}.trace.lock`;
+  try {
+    assertSingleTraceAllowed(cfg.mode);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 409 }
+    );
+  }
+
+  const entry = getActiveJobEntry();
+  const dbPath = getActiveDbPath();
+  const lockPath = entry ? jobLockPath(entry) : `${path.resolve(dbPath)}.trace.lock`;
+
   if (fs.existsSync(lockPath)) {
     return NextResponse.json(
       {
-        error: "A tracer is already running (lock file present).",
+        error: "A tracer is already running for this job (lock file present).",
         lockPath,
       },
       { status: 409 }
@@ -35,7 +52,10 @@ export async function POST() {
       detached: true,
       stdio: "ignore",
       shell: true,
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        DATABASE_PATH: dbPath,
+      },
     }
   );
   child.unref();
@@ -44,5 +64,6 @@ export async function POST() {
     ok: true,
     message: `Tracer started for ${cfg.job.prefix} series ${cfg.job.seriesId}`,
     pid: child.pid ?? null,
+    dbPath,
   });
 }

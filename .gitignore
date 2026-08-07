@@ -51,6 +51,7 @@ track-prefix.db.trace.lock
 config.json
 .track-prefix.env
 provider-health.json
+data/
 logs/
 tracker-data.json
 .env

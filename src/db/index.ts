@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { SERIES } from "@/core/series";
 import { WALLET_LABELS } from "@/core/wallet-labels";
 import { loadConfig } from "@/core/job-config";
+import { getActiveDbPath } from "@/core/job-library";
 import { satToBlock } from "@/core/sat-math";
 
 export function initSchema(db: Database.Database): void {
@@ -232,7 +233,11 @@ export function seedWalletLabels(db: Database.Database): void {
 }
 
 export function getDb(dbPath?: string): Database.Database {
-  const path = dbPath || process.env.DATABASE_PATH || "./track-prefix.db";
+  const path =
+    dbPath ||
+    (process.env.DATABASE_PATH
+      ? process.env.DATABASE_PATH
+      : getActiveDbPath());
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");

@@ -4,6 +4,7 @@
  * Output: ./tracker-data.json (override with SNAPSHOT_OUT)
  */
 import { getDb } from "../src/db/index";
+import { getActiveJobEntry, jobSnapshotPath } from "../src/core/job-library";
 import { getSeries, getUtxoStats, getTraceState, getQueueSize, getUtxosBySeries, getInscriptionsBySeries, getTraceAccounting } from "../src/db/queries";
 import { getWalletLabel } from "../src/core/wallet-labels";
 import { esploraGet } from "../src/providers/esplora-client";
@@ -169,7 +170,12 @@ const snapshot = {
 
 const outPath = process.env.SNAPSHOT_OUT
   ? resolve(process.env.SNAPSHOT_OUT)
-  : resolve(process.cwd(), "tracker-data.json");
+  : (() => {
+      const entry = getActiveJobEntry();
+      return entry
+        ? jobSnapshotPath(entry)
+        : resolve(process.cwd(), "tracker-data.json");
+    })();
 writeFileSync(outPath, JSON.stringify(snapshot, null, 2));
 console.log(`Snapshot exported to ${outPath}`);
 console.log(`Series: ${series.length}, UTXOs: ${seriesData.reduce((a, s) => a + s.utxos.length, 0)}, Inscriptions: ${seriesData.reduce((a, s) => a + s.inscriptions.length, 0)}, Block: ${blockHeight}`);

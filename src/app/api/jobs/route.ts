@@ -6,7 +6,11 @@ import {
   type DataMode,
   type TrackPrefixConfig,
 } from "@/core/job-config";
-import { createJob, listJobSummaries } from "@/core/job-library";
+import {
+  createJob,
+  listJobSummaries,
+  setActiveJob,
+} from "@/core/job-library";
 import { validatePrefix } from "@/core/prefix";
 import { buildSeriesRanges } from "@/core/series-ranges";
 import { seriesIsMined } from "@/core/forecast";
@@ -14,35 +18,38 @@ import { seriesIsMined } from "@/core/forecast";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Ensures legacy layout migration before reading activeJobId.
-  const jobs = listJobSummaries();
   const cfg = loadConfig();
   return NextResponse.json({
-    config: cfg,
     activeJobId: cfg?.activeJobId ?? null,
-    jobs,
-    modeAvailability: {
-      ...defaultModeAvailability(),
-      ...(cfg?.modeAvailability ?? {}),
-    },
+    jobs: listJobSummaries(),
   });
 }
 
+type CreateJobBody = {
+  mode: DataMode;
+  modeCredentials?: TrackPrefixConfig["modeCredentials"];
+  job: {
+    prefix: string;
+    seriesId: number;
+    nameLength: number;
+    satStart: string;
+    satEnd: string;
+    satCount: string;
+    tipHeightAtStart: number;
+  };
+};
+
 export async function POST(req: Request) {
-  let body: TrackPrefixConfig;
+  let body: CreateJobBody;
   try {
-    body = (await req.json()) as TrackPrefixConfig;
+    body = (await req.json()) as CreateJobBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  if (body.version !== 1) {
-    return NextResponse.json({ error: "Unsupported config version." }, { status: 400 });
-  }
-
   const availability = {
     ...defaultModeAvailability(),
-    ...(body.modeAvailability ?? {}),
+    ...(loadConfig()?.modeAvailability ?? {}),
   };
   if (availability[body.mode] !== "ready") {
     return NextResponse.json(
@@ -61,9 +68,12 @@ export async function POST(req: Request) {
   }
 
   const ranges = buildSeriesRanges(validated.prefix);
-  const series = ranges.find((s) => s.id === body.job!.seriesId);
+  const series = ranges.find((s) => s.id === body.job.seriesId);
   if (!series) {
-    return NextResponse.json({ error: "Unknown series id for prefix." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Unknown series id for prefix." },
+      { status: 400 }
+    );
   }
 
   const tip = BigInt(body.job.tipHeightAtStart);
@@ -74,26 +84,32 @@ export async function POST(req: Request) {
     );
   }
 
+  const trackJob = {
+    prefix: validated.prefix,
+    seriesId: series.id,
+    nameLength: series.nameLength,
+    satStart: series.satStart.toString(),
+    satEnd: series.satEnd.toString(),
+    satCount: series.satCount.toString(),
+    tipHeightAtStart: body.job.tipHeightAtStart,
+  };
+
+  const entry = createJob({ job: trackJob, mode: body.mode });
+
   const cfg: TrackPrefixConfig = {
     version: 1,
     wizardComplete: true,
-    mode: body.mode as DataMode,
+    mode: body.mode,
     modeCredentials: body.modeCredentials ?? {},
     modeAvailability: availability,
-    job: {
-      prefix: validated.prefix,
-      seriesId: series.id,
-      nameLength: series.nameLength,
-      satStart: series.satStart.toString(),
-      satEnd: series.satEnd.toString(),
-      satCount: series.satCount.toString(),
-      tipHeightAtStart: body.job.tipHeightAtStart,
-    },
+    activeJobId: entry.id,
+    job: trackJob,
   };
-
-  const entry = createJob({ job: cfg.job!, mode: cfg.mode });
-  cfg.activeJobId = entry.id;
-
   saveConfig(cfg);
-  return NextResponse.json({ ok: true, config: cfg, job: entry });
+
+  return NextResponse.json({
+    ok: true,
+    job: entry,
+    config: cfg,
+  });
 }

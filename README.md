@@ -16,7 +16,7 @@ A browser tab cannot finish a multi-day public-API sync. Rate limits, ISP blocks
 
 - Node.js 20+
 - Network access (unless using your own node — node/ord modes are listed in the wizard; may be marked coming soon in early builds)
-- Disk space for `track-prefix.db`
+- Disk space for SQLite databases under `data/jobs/` (one folder per tracked prefix series)
 
 ## Data modes (nothing hidden)
 
@@ -43,14 +43,32 @@ npm install
 npm start
 ```
 
-Open the printed URL (preferred port **42069**, or the next free port). Complete the browser wizard, then:
+Open the printed URL (preferred port **42069**, or the next free port). Complete the browser wizard (or pick an existing job if you have tracked before), then:
 
 ```bash
 npm run status
 npm run trace:sats          # or: npm run index -- trace --no-scan
 npm run refresh             # after initial complete
-npm run snapshot            # writes ./tracker-data.json
+npm run snapshot            # writes tracker-data.json in the active job folder
 ```
+
+## Job library
+
+Each tracked prefix+series gets its own folder:
+
+```
+data/
+  registry.json
+  jobs/
+    exquisite-s1/
+      track.db
+      provider-health.json
+      tracker-data.json   # after npm run snapshot
+```
+
+The dashboard lists all jobs — open one to view its UTXOs and trace progress, or **+ New track** to add another. On **public/paid API** modes, only **one tracer** may run at a time across all jobs (pause/stop before switching or starting another).
+
+Legacy single-DB installs (`track-prefix.db` + `config.json` at repo root) migrate automatically on first load.
 
 ## Optional publish
 
@@ -63,4 +81,4 @@ See [`docs/export-hosting.md`](docs/export-hosting.md). No auto-push.
 
 ## License / ownership
 
-Your config (`config.json`) and DB are gitignored. Do not commit secrets.
+Your config (`config.json`) and databases under `data/` are gitignored. Do not commit secrets.
