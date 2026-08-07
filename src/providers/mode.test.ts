@@ -22,4 +22,16 @@ describe("resolveEsploraBases", () => {
       })
     ).toEqual(["https://example.com/api"]);
   });
+
+  it("btc modes do not resolve Esplora bases", () => {
+    expect(() =>
+      resolveEsploraBases({
+        mode: "btc_node",
+        modeCredentials: {
+          rpcUrl: "http://127.0.0.1:8332",
+          rpcUser: "u",
+        },
+      })
+    ).toThrow(/does not use Esplora/);
+  });
 });

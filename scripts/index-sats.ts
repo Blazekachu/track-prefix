@@ -1,5 +1,4 @@
 import { getDb } from "../src/db/index";
-import { PublicOrdProvider } from "../src/providers/public-provider";
 import {
   CoinbaseTracer,
   TracePausedError,
@@ -11,7 +10,7 @@ import { loadConfig } from "../src/core/job-config";
 import { getActiveDbPath } from "../src/core/job-library";
 import { SERIES } from "../src/core/series";
 import { originBlockHeights } from "../src/core/origin-blocks";
-import { resolveEsploraBases } from "../src/providers/mode";
+import { createProvider } from "../src/providers/create-provider";
 import { clearControl, writeControl } from "../src/core/trace-control";
 import { getTraceState, updateTraceState } from "../src/db/queries";
 import fs from "node:fs";
@@ -136,24 +135,31 @@ async function main() {
 
   try {
     const cfg = loadConfig();
-    if (cfg) {
-      try {
+    let provider;
+    let providerLabel = "public-esplora";
+    try {
+      const created = createProvider(cfg, delayMs);
+      provider = created.provider;
+      providerLabel = created.label;
+      if (cfg?.mode === "paid_api" && cfg.modeCredentials.apiKey) {
+        process.env.ESPLORA_API_KEY = cfg.modeCredentials.apiKey;
+      }
+      if (cfg?.mode === "public_api" || cfg?.mode === "paid_api") {
+        const { resolveEsploraBases } = await import("../src/providers/mode");
         const bases = resolveEsploraBases({
           mode: cfg.mode,
           modeCredentials: cfg.modeCredentials,
         });
         process.env.ESPLORA_BASE_URLS = bases.join(",");
-        if (cfg.mode === "paid_api" && cfg.modeCredentials.apiKey) {
-          process.env.ESPLORA_API_KEY = cfg.modeCredentials.apiKey;
-        }
-      } catch (e) {
-        console.error(`[indexer] ${e instanceof Error ? e.message : String(e)}`);
-        process.exitCode = 1;
-        return;
       }
+    } catch (e) {
+      console.error(`[indexer] ${e instanceof Error ? e.message : String(e)}`);
+      process.exitCode = 1;
+      return;
     }
 
-    const provider = new PublicOrdProvider(delayMs);
+    console.log(`[indexer] Provider: ${providerLabel}`);
+
     let satStart: bigint;
     let satEnd: bigint;
     let seriesId = 1;

@@ -15,7 +15,7 @@ A browser tab cannot finish a multi-day public-API sync. Rate limits, ISP blocks
 ## Prerequisites
 
 - Node.js 20+
-- Network access (unless using your own node — node/ord modes are listed in the wizard; may be marked coming soon in early builds)
+- Network access (public/paid API) **or** local bitcoind (+ optional ord)
 - Disk space for SQLite databases under `data/jobs/` (one folder per tracked prefix series)
 
 ## Data modes (nothing hidden)
@@ -24,8 +24,20 @@ A browser tab cannot finish a multi-day public-API sync. Rate limits, ISP blocks
 |------|-------------|--------|
 | Public API | nothing | Works immediately; rate limits / ISP bans possible |
 | Paid API | base URL + optional API key | Higher limits; still third-party |
-| BTC node | RPC | Coming soon in early builds if labeled |
-| BTC + ord | RPC + ord URL | Coming soon in early builds if labeled |
+| BTC node | RPC URL + user/password | Local bitcoind with `txindex=1` (Core 24+ recommended) |
+| BTC + ord | RPC + ord HTTP URL | Same as BTC node, plus local ord for sat/inscription metadata |
+
+## BTC node / ord setup
+
+1. Run **mainnet** bitcoind with `txindex=1` (sat-name math is mainnet-native).
+2. Optional: run **ord** with sat index for inscription scanning.
+3. In the wizard choose **BTC node** or **BTC node + ord**, enter e.g.:
+   - RPC `http://127.0.0.1:8332` + RPC user/password
+   - ord `http://127.0.0.1:80` (btc_ord only)
+4. Use **Test connection** before continuing.
+5. Start tracing as usual — the dashboard stays on **:42069**; the DB is still under `data/jobs/`. The node is only a data source (not where track-prefix stores jobs).
+
+Node modes are **not** limited to one tracer at a time (unlike public/paid API). URLs are free-form — you can point at other ports for connectivity smoke tests, but real prefix tracing expects mainnet.
 
 ## What to expect
 

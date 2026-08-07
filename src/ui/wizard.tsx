@@ -30,6 +30,11 @@ export function Wizard({
   const [mode, setMode] = useState<DataMode>("public_api");
   const [apiBaseUrl, setApiBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [rpcUrl, setRpcUrl] = useState("http://127.0.0.1:8332");
+  const [rpcUser, setRpcUser] = useState("");
+  const [rpcPassword, setRpcPassword] = useState("");
+  const [ordUrl, setOrdUrl] = useState("http://127.0.0.1:80");
+  const [connMsg, setConnMsg] = useState<string | null>(null);
   const [prefix, setPrefix] = useState("");
   const [tip, setTip] = useState<number | null>(null);
   const [seriesList, setSeriesList] = useState<SeriesInfo[]>([]);
@@ -42,19 +47,92 @@ export function Wizard({
     [seriesList, selectedSeriesId]
   );
 
+  function modeCredentialsForSave(): TrackPrefixConfig["modeCredentials"] {
+    if (mode === "paid_api") {
+      return {
+        apiBaseUrl: apiBaseUrl.trim(),
+        apiKey: apiKey.trim() || undefined,
+      };
+    }
+    if (mode === "btc_node" || mode === "btc_ord") {
+      return {
+        rpcUrl: rpcUrl.trim(),
+        rpcUser: rpcUser.trim(),
+        rpcPassword: rpcPassword,
+        ...(mode === "btc_ord" ? { ordUrl: ordUrl.trim() } : {}),
+      };
+    }
+    return {};
+  }
+
+  function credentialsReady(): boolean {
+    if (mode === "paid_api") return Boolean(apiBaseUrl.trim());
+    if (mode === "btc_node") {
+      return Boolean(rpcUrl.trim() && rpcUser.trim());
+    }
+    if (mode === "btc_ord") {
+      return Boolean(rpcUrl.trim() && rpcUser.trim() && ordUrl.trim());
+    }
+    return true;
+  }
+
+  async function testConnection() {
+    setError(null);
+    setConnMsg(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/provider-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          modeCredentials: modeCredentialsForSave(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Connection failed");
+      }
+      const parts = [
+        `OK — tip ${json.tipHeight}`,
+        json.chain ? `chain=${json.chain}` : null,
+        json.ord?.ok ? "ord reachable" : null,
+      ].filter(Boolean);
+      setConnMsg(parts.join(" · "));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadSeries() {
     setError(null);
     setBusy(true);
     try {
-      const tipRes = await fetch("/api/tip");
-      const tipJson = await tipRes.json();
-      if (!tipRes.ok) throw new Error(tipJson.error || "Failed to fetch tip");
-      const height = tipJson.height as number;
+      let height: number;
+      if (mode === "btc_node" || mode === "btc_ord") {
+        const tipRes = await fetch("/api/provider-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode,
+            modeCredentials: modeCredentialsForSave(),
+          }),
+        });
+        const tipJson = await tipRes.json();
+        if (!tipRes.ok || !tipJson.ok) {
+          throw new Error(tipJson.error || "Failed to fetch tip from node");
+        }
+        height = tipJson.tipHeight as number;
+      } else {
+        const tipRes = await fetch("/api/tip");
+        const tipJson = await tipRes.json();
+        if (!tipRes.ok) throw new Error(tipJson.error || "Failed to fetch tip");
+        height = tipJson.height as number;
+      }
       setTip(height);
 
-      // Client-side series listing via a tiny API would be better; for now call
-      // a dedicated endpoint is not required — use /api/config POST validation
-      // after computing in the browser through a lightweight series endpoint.
       const seriesRes = await fetch(
         `/api/series-preview?prefix=${encodeURIComponent(prefix.trim())}&tip=${height}`
       );
@@ -83,11 +161,7 @@ export function Wizard({
         version: 1,
         wizardComplete: true,
         mode,
-        modeCredentials: {
-          ...(mode === "paid_api"
-            ? { apiBaseUrl: apiBaseUrl.trim(), apiKey: apiKey.trim() || undefined }
-            : {}),
-        },
+        modeCredentials: modeCredentialsForSave(),
         modeAvailability,
         job: {
           prefix: prefix.trim().toLowerCase(),
@@ -213,9 +287,53 @@ export function Wizard({
             </div>
           )}
           {(mode === "btc_node" || mode === "btc_ord") && (
-            <p className="text-sm text-terminal-dim">
-              This mode is marked coming soon in this build.
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm text-terminal-dim">
+                Mainnet bitcoind with <code>txindex=1</code> (Core 24+ recommended
+                for spend lookups). The track-prefix DB still lives under{" "}
+                <code>data/jobs/</code> — the node is only a data source.
+              </p>
+              <input
+                className="w-full bg-black border border-terminal-border p-2"
+                placeholder="RPC URL (e.g. http://127.0.0.1:8332)"
+                value={rpcUrl}
+                onChange={(e) => setRpcUrl(e.target.value)}
+              />
+              <input
+                className="w-full bg-black border border-terminal-border p-2"
+                placeholder="RPC user"
+                value={rpcUser}
+                onChange={(e) => setRpcUser(e.target.value)}
+                autoComplete="username"
+              />
+              <input
+                className="w-full bg-black border border-terminal-border p-2"
+                placeholder="RPC password"
+                type="password"
+                value={rpcPassword}
+                onChange={(e) => setRpcPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              {mode === "btc_ord" && (
+                <input
+                  className="w-full bg-black border border-terminal-border p-2"
+                  placeholder="ord URL (e.g. http://127.0.0.1:80)"
+                  value={ordUrl}
+                  onChange={(e) => setOrdUrl(e.target.value)}
+                />
+              )}
+              <button
+                type="button"
+                className="px-3 py-1 border border-terminal-amber text-terminal-amber text-xs"
+                disabled={busy || !credentialsReady()}
+                onClick={() => void testConnection()}
+              >
+                {busy ? "Testing…" : "Test connection"}
+              </button>
+              {connMsg && (
+                <p className="text-xs text-terminal-green">{connMsg}</p>
+              )}
+            </div>
           )}
           <div className="flex gap-2">
             <button
@@ -229,7 +347,7 @@ export function Wizard({
               type="button"
               className="px-4 py-2 border border-terminal-green text-terminal-green"
               onClick={() => setStep(3)}
-              disabled={mode === "paid_api" && !apiBaseUrl.trim()}
+              disabled={!credentialsReady()}
             >
               Next
             </button>

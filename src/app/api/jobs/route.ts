@@ -14,6 +14,7 @@ import {
 import { validatePrefix } from "@/core/prefix";
 import { buildSeriesRanges } from "@/core/series-ranges";
 import { seriesIsMined } from "@/core/forecast";
+import { validateModeCredentials } from "@/providers/mode";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,18 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },
       { status: 409 }
+    );
+  }
+
+  try {
+    validateModeCredentials({
+      mode: body.mode,
+      modeCredentials: body.modeCredentials ?? {},
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 400 }
     );
   }
 

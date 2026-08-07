@@ -10,7 +10,7 @@ export type ModeCredentials = {
   apiKey?: string;
 };
 
-/** Resolve Esplora base URLs for the selected wizard mode. */
+/** Resolve Esplora base URLs for public/paid API modes only. */
 export function resolveEsploraBases(input: {
   mode: DataMode;
   modeCredentials: ModeCredentials;
@@ -26,6 +26,29 @@ export function resolveEsploraBases(input: {
     return [base];
   }
   throw new Error(
-    `Mode ${input.mode} is coming soon — use public_api or paid_api.`
+    `Mode ${input.mode} does not use Esplora — use createProvider() instead.`
   );
+}
+
+export function validateModeCredentials(input: {
+  mode: DataMode;
+  modeCredentials: ModeCredentials;
+}): void {
+  if (input.mode === "paid_api") {
+    if (!input.modeCredentials.apiBaseUrl?.trim()) {
+      throw new Error("paid_api requires modeCredentials.apiBaseUrl");
+    }
+    return;
+  }
+  if (input.mode === "btc_node" || input.mode === "btc_ord") {
+    if (!input.modeCredentials.rpcUrl?.trim()) {
+      throw new Error(`${input.mode} requires modeCredentials.rpcUrl`);
+    }
+    if (!input.modeCredentials.rpcUser?.trim()) {
+      throw new Error(`${input.mode} requires modeCredentials.rpcUser`);
+    }
+    if (input.mode === "btc_ord" && !input.modeCredentials.ordUrl?.trim()) {
+      throw new Error("btc_ord requires modeCredentials.ordUrl");
+    }
+  }
 }

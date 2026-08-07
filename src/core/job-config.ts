@@ -60,7 +60,7 @@ export function defaultModeAvailability(): Record<
   return {
     public_api: "ready",
     paid_api: "ready",
-    btc_node: "coming_soon",
-    btc_ord: "coming_soon",
+    btc_node: "ready",
+    btc_ord: "ready",
   };
 }
