@@ -1,5 +1,8 @@
 export const SUPPLY = 2_099_999_997_690_000n;
 
+const HALVING_INTERVAL = 210_000n;
+const INITIAL_SUBSIDY = 5_000_000_000n;
+
 export function satToName(sat: bigint): string {
   let x = SUPPLY - sat;
   let name = "";
@@ -19,17 +22,41 @@ export function nameToSat(name: string): bigint {
   return SUPPLY - x;
 }
 
+/** Block subsidy (in sats) for a given block height. */
+export function blockSubsidy(height: bigint): bigint {
+  const epoch = height / HALVING_INTERVAL;
+  if (epoch >= 64n) return 0n;
+  return INITIAL_SUBSIDY >> epoch;
+}
+
+/** The first (lowest) sat number created by a given block. */
+export function blockFirstSat(height: bigint): bigint {
+  let sat = 0n;
+  let subsidy = INITIAL_SUBSIDY;
+  let h = 0n;
+  for (let epoch = 0; epoch < 64; epoch++) {
+    const epochEnd = h + HALVING_INTERVAL;
+    if (height < epochEnd) {
+      return sat + (height - h) * subsidy;
+    }
+    sat += HALVING_INTERVAL * subsidy;
+    h = epochEnd;
+    subsidy /= 2n;
+  }
+  return sat;
+}
+
 export function satToBlock(sat: bigint): bigint {
   let remaining = sat;
-  let subsidy = 5_000_000_000n;
+  let subsidy = INITIAL_SUBSIDY;
   let height = 0n;
   for (let epoch = 0; epoch < 64; epoch++) {
-    const epochSats = 210_000n * subsidy;
+    const epochSats = HALVING_INTERVAL * subsidy;
     if (remaining < epochSats) {
       return height + remaining / subsidy;
     }
     remaining -= epochSats;
-    height += 210_000n;
+    height += HALVING_INTERVAL;
     subsidy /= 2n;
   }
   return height;
