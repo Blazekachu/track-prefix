@@ -2,89 +2,76 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const MEMPOOL_WS = "wss://mempool.space/api/v1/ws";
-const MEMPOOL_API = "https://mempool.space/api/blocks/tip/height";
+export type TipState =
+  | { status: "ok"; height: number; source: string }
+  | { status: "error"; error: string };
+
+export async function fetchTipHeight(): Promise<TipState> {
+  try {
+    const res = await fetch("/api/block-height");
+    const data = (await res.json()) as {
+      ok?: boolean;
+      height?: unknown;
+      source?: unknown;
+      error?: unknown;
+    };
+    if (res.ok && data.ok !== false) {
+      const height = Number(data.height);
+      const source = typeof data.source === "string" ? data.source : "public explorer";
+      if (Number.isFinite(height) && height > 0) {
+        return { status: "ok", height, source };
+      }
+      return {
+        status: "error",
+        error: "Public explorers returned an invalid block height.",
+      };
+    }
+    const error =
+      typeof data.error === "string" && data.error.trim()
+        ? data.error
+        : "Could not fetch block height from mempool.space or other public explorers.";
+    return { status: "error", error };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return {
+      status: "error",
+      error: `Local /api/block-height request failed: ${reason}`,
+    };
+  }
+}
 
 export function useBlockHeight() {
   const [blockHeight, setBlockHeight] = useState<number | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
   const bestRef = useRef<number>(0);
 
-  function updateHeight(h: number) {
-    if (h > bestRef.current) {
-      bestRef.current = h;
-      setBlockHeight(h);
-    }
-  }
-
-  // Immediate HTTP fetch so we don't wait for WebSocket
   useEffect(() => {
     async function fetchHeight() {
-      try {
-        const res = await fetch(MEMPOOL_API);
-        if (res.ok) {
-          const height = parseInt(await res.text(), 10);
-          if (!isNaN(height)) updateHeight(height);
+      const result = await fetchTipHeight();
+      if (result.status === "ok") {
+        if (result.height >= bestRef.current) {
+          bestRef.current = result.height;
+          setBlockHeight(result.height);
         }
-      } catch {
-        // will retry via WebSocket or polling
+        setSource(result.source);
+        setError(null);
+        setConnected(true);
+        return;
       }
+      if (bestRef.current === 0) {
+        setBlockHeight(null);
+        setSource(null);
+        setConnected(false);
+      }
+      setError(result.error);
     }
-    fetchHeight();
+    void fetchHeight();
 
-    // Poll every 60s as fallback if WebSocket drops
-    const poll = setInterval(fetchHeight, 60000);
+    const poll = setInterval(() => void fetchHeight(), 60000);
     return () => clearInterval(poll);
   }, []);
 
-  // WebSocket for real-time updates
-  useEffect(() => {
-    function connect() {
-      try {
-        const ws = new WebSocket(MEMPOOL_WS);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          setConnected(true);
-          ws.send(JSON.stringify({ action: "want", data: ["blocks"] }));
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.block?.height) {
-              updateHeight(data.block.height);
-            }
-            if (data.blocks?.length) {
-              const maxH = Math.max(...data.blocks.map((b: { height: number }) => b.height));
-              if (maxH) updateHeight(maxH);
-            }
-          } catch {
-            // ignore parse errors
-          }
-        };
-
-        ws.onclose = () => {
-          setConnected(false);
-          setTimeout(connect, 10000);
-        };
-
-        ws.onerror = () => {
-          ws.close();
-        };
-      } catch {
-        setConnected(false);
-        setTimeout(connect, 10000);
-      }
-    }
-
-    connect();
-
-    return () => {
-      wsRef.current?.close();
-    };
-  }, []);
-
-  return { blockHeight, connected };
+  return { blockHeight, source, error, connected };
 }

@@ -12,16 +12,24 @@ export const metadata: Metadata = {
   description: "Local FIFO tracer for mined sat-name prefix series",
 };
 
+const themeInitScript = `(function(){try{var t=localStorage.getItem("track-prefix-theme");document.documentElement.setAttribute("data-theme",(t==="light"||t==="dark")?t:"dark");}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${jetbrainsMono.className} min-h-screen bg-terminal-bg text-terminal-text font-mono antialiased`}
-      >
+    <html
+      lang="en"
+      data-theme="dark"
+      suppressHydrationWarning
+      className={jetbrainsMono.className}
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className="min-h-screen bg-terminal-bg text-terminal-text font-mono antialiased">
         {children}
       </body>
     </html>

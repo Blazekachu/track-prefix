@@ -1,16 +1,49 @@
 @import "tailwindcss";
 
+:root,
+[data-theme="dark"] {
+  --tp-bg: #0a0a0a;
+  --tp-surface: #111111;
+  --tp-border: #1a1a1a;
+  --tp-green: #00ff41;
+  --tp-amber: #ffb000;
+  --tp-red: #ff3333;
+  --tp-dim: #555555;
+  --tp-text: #cccccc;
+  --tp-bright: #ffffff;
+}
+
+[data-theme="light"] {
+  --tp-bg: #f4f6f9;
+  --tp-surface: #ffffff;
+  --tp-border: #ccd3dc;
+  --tp-green: #148046;
+  --tp-amber: #b56a00;
+  --tp-red: #c62828;
+  --tp-dim: #5e6773;
+  --tp-text: #1d2632;
+  --tp-bright: #0f1724;
+}
+
 @theme {
   --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
-  --color-terminal-bg: #0a0a0a;
-  --color-terminal-surface: #111111;
-  --color-terminal-border: #1a1a1a;
-  --color-terminal-green: #00ff41;
-  --color-terminal-amber: #ffb000;
-  --color-terminal-red: #ff3333;
-  --color-terminal-dim: #555555;
-  --color-terminal-text: #cccccc;
-  --color-terminal-bright: #ffffff;
+  --color-terminal-bg: var(--tp-bg);
+  --color-terminal-surface: var(--tp-surface);
+  --color-terminal-border: var(--tp-border);
+  --color-terminal-green: var(--tp-green);
+  --color-terminal-amber: var(--tp-amber);
+  --color-terminal-red: var(--tp-red);
+  --color-terminal-dim: var(--tp-dim);
+  --color-terminal-text: var(--tp-text);
+  --color-terminal-bright: var(--tp-bright);
+}
+
+html {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
@@ -31,8 +64,13 @@ body {
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 .cursor-blink {
