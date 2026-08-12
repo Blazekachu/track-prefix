@@ -56,11 +56,12 @@ export function InscriptionProgress() {
   }, []);
 
   useEffect(() => {
-    void load();
+    const initial = setTimeout(() => void load(), 0);
     const interval = setInterval(() => void load(), 4000);
     const onChange = () => void load();
     window.addEventListener("track-prefix:series-changed", onChange);
     return () => {
+      clearTimeout(initial);
       clearInterval(interval);
       window.removeEventListener("track-prefix:series-changed", onChange);
     };

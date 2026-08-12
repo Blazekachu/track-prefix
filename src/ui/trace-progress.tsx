@@ -74,11 +74,12 @@ export function TraceProgress({
   }
 
   useEffect(() => {
-    void load();
+    const initial = setTimeout(() => void load(), 0);
     const interval = setInterval(() => void load(), 5000);
     const onSeriesChange = () => void load();
     window.addEventListener("track-prefix:series-changed", onSeriesChange);
     return () => {
+      clearTimeout(initial);
       clearInterval(interval);
       window.removeEventListener("track-prefix:series-changed", onSeriesChange);
     };

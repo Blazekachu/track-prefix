@@ -13,6 +13,7 @@ interface Utxo {
 
 export function ActivityFeed() {
   const [recent, setRecent] = useState<Utxo[]>([]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     async function load() {
@@ -32,13 +33,17 @@ export function ActivityFeed() {
     load();
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const truncate = (s: string) =>
     s.length > 16 ? s.slice(0, 8) + "..." + s.slice(-6) : s;
 
   const timeAgo = (dateStr: string) => {
-    const now = Date.now();
     const then = new Date(dateStr + "Z").getTime();
-    const diffMs = now - then;
+    const diffMs = nowMs - then;
     const hours = Math.floor(diffMs / 3600000);
     const days = Math.floor(hours / 24);
     if (days > 0) return `${days}d ago`;

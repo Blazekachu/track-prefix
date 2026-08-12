@@ -11,6 +11,7 @@ import { Wizard } from "@/ui/wizard";
 import { JobLibrary } from "@/ui/job-library";
 import { ModeInfoBanner } from "@/ui/mode-info";
 import { InscriptionProgress } from "@/ui/inscription-progress";
+import { SnapshotExport } from "@/ui/snapshot-export";
 import type { DataMode } from "@/core/job-config";
 
 type BootState =
@@ -152,6 +153,7 @@ export default function Page() {
         <NextTarget />
         <TraceProgress onNewTrack={() => setShowWizard(true)} />
         <InscriptionProgress />
+        <SnapshotExport />
         <SeriesDetail />
         <ActivityFeed />
       </main>

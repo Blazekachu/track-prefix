@@ -36,9 +36,12 @@ export function NextTarget() {
   }, []);
 
   useEffect(() => {
-    void load();
+    const initial = setTimeout(() => void load(), 0);
     const interval = setInterval(() => void load(), 15000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(interval);
+    };
   }, [load]);
 
   if (allMined && !next) {

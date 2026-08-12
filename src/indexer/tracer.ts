@@ -301,7 +301,7 @@ export class CoinbaseTracer {
    * whose spending TX we need to fetch and trace forward.
    */
   private async processQueue(): Promise<void> {
-    let queueSize = getQueueSize(this.db);
+    const queueSize = getQueueSize(this.db);
     if (queueSize === 0) {
       console.log(`[tracer] Queue empty — nothing to trace`);
       const accounting = getTraceAccounting(this.db, this.seriesId);

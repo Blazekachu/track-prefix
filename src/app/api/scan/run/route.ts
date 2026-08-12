@@ -74,7 +74,6 @@ export async function POST(req: Request) {
     db.close();
   }
 
-  process.env.DATABASE_PATH = dbPath;
   const lockPath = `${path.resolve(dbPath)}.scan.lock`;
   if (fs.existsSync(lockPath)) {
     return NextResponse.json(

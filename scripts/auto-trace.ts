@@ -2,6 +2,9 @@ import { getDb } from "../src/db/index";
 import { PublicOrdProvider } from "../src/providers/public-provider";
 import { CoinbaseTracer } from "../src/indexer/tracer";
 import { getQueueSize, getTraceState } from "../src/db/queries";
+import { loadConfig } from "../src/core/job-config";
+import { SERIES } from "../src/core/series";
+import { originBlockHeights } from "../src/core/origin-blocks";
 
 const delayMs = parseInt(process.env.API_DELAY_MS || "500", 10);
 const dbPath = process.env.DATABASE_PATH || "./bhang-tracker.db";
@@ -23,6 +26,19 @@ console.log(`[auto-trace] Press Ctrl+C to stop gracefully\n`);
 
 async function run() {
   let consecutiveFailures = 0;
+  const cfg = loadConfig();
+  const targetSeries = cfg?.job
+    ? {
+        seriesId: cfg.job.seriesId,
+        satStart: BigInt(cfg.job.satStart),
+        satEnd: BigInt(cfg.job.satEnd),
+      }
+    : {
+        seriesId: SERIES[0].id,
+        satStart: SERIES[0].satStart,
+        satEnd: SERIES[0].satEnd,
+      };
+  const origins = originBlockHeights(targetSeries.satStart, targetSeries.satEnd);
 
   while (!stopping) {
     const db = getDb(dbPath);
@@ -38,8 +54,13 @@ async function run() {
     console.log(`[auto-trace] Run #${consecutiveFailures + 1} — ${queueBefore} items in queue`);
 
     const provider = new PublicOrdProvider(delayMs);
-    const tracer = new CoinbaseTracer(db, provider);
-    let processed = 0;
+    const tracer = new CoinbaseTracer(
+      db,
+      provider,
+      { start: targetSeries.satStart, end: targetSeries.satEnd },
+      origins,
+      targetSeries.seriesId
+    );
 
     try {
       await tracer.run("trace");
@@ -49,8 +70,6 @@ async function run() {
 
     const state = getTraceState(db);
     const queueAfter = getQueueSize(db);
-    // Estimate items processed from queue delta + new UTXOs discovered
-    processed = Math.max(0, queueBefore - queueAfter + (queueAfter - queueBefore));
     const utxosFound = state?.total_utxos_found ?? 0;
 
     console.log(`[auto-trace] Result — ${utxosFound} UTXOs found, ${queueAfter} in queue`);

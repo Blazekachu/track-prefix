@@ -60,9 +60,12 @@ export function SeriesCards() {
   }, []);
 
   useEffect(() => {
-    void load();
+    const initial = setTimeout(() => void load(), 0);
     const interval = setInterval(() => void load(), 8000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(interval);
+    };
   }, [load]);
 
   async function runTrace(

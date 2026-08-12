@@ -18,7 +18,6 @@ import {
   registryPath,
   jobsRoot,
 } from "./job-library";
-import { shouldBlockNewTrack } from "./job-policy";
 
 describe("job-library", () => {
   let dir: string;

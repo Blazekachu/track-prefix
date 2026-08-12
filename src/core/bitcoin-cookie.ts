@@ -15,6 +15,12 @@ export function defaultBitcoinCookiePaths(): string[] {
     const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
     return [path.join(appData, "Bitcoin", ".cookie")];
   }
+  if (process.platform === "darwin") {
+    return [
+      path.join(home, "Library", "Application Support", "Bitcoin", ".cookie"),
+      path.join(home, ".bitcoin", ".cookie"),
+    ];
+  }
   return [path.join(home, ".bitcoin", ".cookie")];
 }
 

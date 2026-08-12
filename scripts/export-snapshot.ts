@@ -70,7 +70,7 @@ async function fetchAddressBalance(address: string): Promise<number | null> {
 // paces them, which is what keeps providers from rate-limiting/banning us.
 async function computeMultiRangeWallets(
   utxos: Array<{ address: string; outpoint: string; sat_count: number; wallet_label?: { label: string; kind: string } }>
-): Promise<Array<{ address: string; range_count: number; outpoint_count: number; bhang_sats: number; btc_balance_sats: number | null; wallet_label?: { label: string; kind: string } }>> {
+): Promise<Array<{ address: string; range_count: number; outpoint_count: number; tracked_sats: number; btc_balance_sats: number | null; wallet_label?: { label: string; kind: string } }>> {
   type Agg = { ranges: number; outpoints: Set<string>; tracked_sats: number; label?: { label: string; kind: string } };
   const byAddr: Record<string, Agg> = {};
   for (const u of utxos) {

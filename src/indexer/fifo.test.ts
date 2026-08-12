@@ -13,8 +13,10 @@ describe("mapSatRanges", () => {
     const result = mapSatRanges(tx, inputRanges);
 
     expect(result).toHaveLength(1);
-    expect(result[0].start).toBe(100n);
-    expect(result[0].end).toBe(9099n);
+    const first = result[0];
+    expect(first).toBeDefined();
+    expect(first!.start).toBe(100n);
+    expect(first!.end).toBe(9099n);
   });
 
   it("splits one input across two outputs", () => {
@@ -28,10 +30,14 @@ describe("mapSatRanges", () => {
     const result = mapSatRanges(tx, inputRanges);
 
     expect(result).toHaveLength(2);
-    expect(result[0].start).toBe(100n);
-    expect(result[0].end).toBe(6099n);
-    expect(result[1].start).toBe(6100n);
-    expect(result[1].end).toBe(9099n);
+    const first = result[0];
+    const second = result[1];
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(first!.start).toBe(100n);
+    expect(first!.end).toBe(6099n);
+    expect(second!.start).toBe(6100n);
+    expect(second!.end).toBe(9099n);
   });
 
   it("handles two inputs flowing into outputs", () => {
@@ -49,7 +55,9 @@ describe("mapSatRanges", () => {
 
     expect(result).toHaveLength(2);
     // First output (8000 sats): all of input 0 (100-5099) + 3000 from input 1 (20000-22999)
-    expect(result[0].start).toBe(100n);
+    const first = result[0];
+    expect(first).toBeDefined();
+    expect(first!.start).toBe(100n);
   });
 
   it("returns empty for an output that gets no tracked sats", () => {
@@ -77,8 +85,10 @@ describe("mapSatRanges — detailed output mapping", () => {
 
     const result = mapSatRanges(tx, inputRanges);
 
-    expect(result[0].start).toBe(50000n);
-    expect(result[0].end).toBe(59999n);
+    const first = result[0];
+    expect(first).toBeDefined();
+    expect(first!.start).toBe(50000n);
+    expect(first!.end).toBe(59999n);
     expect(result[1]).toBeUndefined();
   });
 });
